@@ -1,0 +1,6 @@
+# Tamito KAJIYAMA <12 September 2001>
+# $Id: Setup.in,v 1.2 2001/09/23 00:35:40 kajiyama Exp $
+
+*shared*
+
+eb ebmodule.c -I/usr/local/include -L/usr/local/lib -leb -lz
