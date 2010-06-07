@@ -5,7 +5,7 @@
 from distutils.core import setup, Extension
 
 setup (name = "ebmodule",
-       version = "2.0",
+       version = "2.1",
        description = "A wrapper module of the EB library",
        author = "Tamito KAJIYAMA",
        author_email = "kajiyama@grad.sccs.chukyo-u.ac.jp",
@@ -14,6 +14,6 @@ setup (name = "ebmodule",
            "eblib"],
        ext_modules = [
            Extension("ebmodule", ["src/ebmodule.c"],
-                     include_dirs=["/usr/local/include","/home/plateau/src/ebmodule-2.0/src"],
-                     library_dirs=["/home/plateau/src/ebmodule-2.0/src/eb/.libs","/home/plateau/src/ebmodule-2.0/src/eb_lib/zlib/.libs"],
+                     include_dirs=["/usr/local/include","./src"],
+                     #library_dirs=["/home/plateau/src/ebmodule-2.0/src/eb/.libs","/home/plateau/src/ebmodule-2.0/src/eb_lib/zlib/.libs"],
                      libraries=["eb", "z"])])

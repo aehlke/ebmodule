@@ -1642,7 +1642,8 @@ py_eb_read_text(PyObject *self, PyObject *args)
   HooksetObject *hookset;
   PyObject *container, *key, *context;
   char buffer[EB_SIZE_PAGE];
-  int status, len;
+  int status;
+  ssize_t len;
 
   if (!PyArg_ParseTuple(args, "O!O!O!O", &BookType, &book, &AppendixType,
                         &appendix, &HooksetType, &hookset, &container))
@@ -1672,7 +1673,8 @@ py_eb_read_heading(PyObject *self, PyObject *args)
   HooksetObject *hookset;
   PyObject *container, *key, *context;
   char buffer[EB_SIZE_PAGE];
-  int status, len;
+  int status;
+  ssize_t len;
 
   if (!PyArg_ParseTuple(args, "O!O!O!O", &BookType, &book, &AppendixType,
                         &appendix, &HooksetType, &hookset, &container))
@@ -1699,7 +1701,8 @@ py_eb_read_rawtext(PyObject *self, PyObject *args)
 {
   BookObject *book;
   char *buffer;
-  int buffer_size, status, len;
+  int buffer_size, status;
+  ssize_t len;
   PyObject *string;
 
   if (!PyArg_ParseTuple(args, "O!i", &BookType, &book, &buffer_size))
@@ -1765,19 +1768,22 @@ py_eb_current_candidate(PyObject *self, PyObject *args)
   return PyString_FromString(eb_current_candidate(&book->book));
 }
 
-static char py_eb_forward_text__doc__[] = "eb_forward_text(book, appendix, hookset) => string Return the body of the section starting from the current file position.  Raise EBError if failed.";
+static char py_eb_forward_text__doc__[] = "eb_forward_text(book, appendix) => string Return the body of the section starting from the current file position.  Raise EBError if failed.";
 
 static PyObject *
 py_eb_forward_text(PyObject *self, PyObject *args)
 {
   BookObject *book;
-  HooksetObject *hookset;
+  /*HooksetObject *hookset;*/
+  AppendixObject *appendix;
   int status;
 
-  if (!PyArg_ParseTuple(args, "O!O!",
-                        &BookType, &book, &HooksetType, &hookset))
+  /*if (!PyArg_ParseTuple(args, "O!O!",*/
+                        /*&BookType, &book, &HooksetType, &hookset))*/
+  if (!PyArg_ParseTuple(args, "O!O",
+                        &BookType, &book, &AppendixType, &appendix))
     return NULL;
-  status = eb_forward_text(&book->book, &hookset->hookset);
+  status = eb_forward_text(&book->book, &appendix->appendix);
   if (status != EB_SUCCESS) {
     PyErr_SetObject(EBError, error_object(status));
     return NULL;
@@ -1826,7 +1832,8 @@ static PyObject *
 py_eb_narrow_font_xbm_size(PyObject *self, PyObject *args)
 {
   EB_Font_Code font;
-  int size, status;
+  size_t size;
+  int status;
 
   if (!PyArg_ParseTuple(args, "i", &font))
     return NULL;
@@ -1844,7 +1851,8 @@ static PyObject *
 py_eb_narrow_font_xpm_size(PyObject *self, PyObject *args)
 {
   EB_Font_Code font;
-  int size, status;
+  size_t size;
+  int status;
 
   if (!PyArg_ParseTuple(args, "i", &font))
     return NULL;
@@ -1862,7 +1870,8 @@ static PyObject *
 py_eb_narrow_font_gif_size(PyObject *self, PyObject *args)
 {
   EB_Font_Code font;
-  int size, status;
+  size_t size;
+  int status;
 
   if (!PyArg_ParseTuple(args, "i", &font))
     return NULL;
@@ -1880,7 +1889,8 @@ static PyObject *
 py_eb_wide_font_xbm_size(PyObject *self, PyObject *args)
 {
   EB_Font_Code font;
-  int size, status;
+  size_t size;
+  int status;
 
   if (!PyArg_ParseTuple(args, "i", &font))
     return NULL;
@@ -1898,7 +1908,8 @@ static PyObject *
 py_eb_wide_font_xpm_size(PyObject *self, PyObject *args)
 {
   EB_Font_Code font;
-  int size, status;
+  size_t size;
+  int status;
 
   if (!PyArg_ParseTuple(args, "i", &font))
     return NULL;
@@ -1916,7 +1927,8 @@ static PyObject *
 py_eb_wide_font_gif_size(PyObject *self, PyObject *args)
 {
   EB_Font_Code font;
-  int size, status;
+  size_t size;
+  int status;
 
   if (!PyArg_ParseTuple(args, "i", &font))
     return NULL;
@@ -1934,7 +1946,8 @@ static PyObject *
 py_eb_bitmap_to_xbm(PyObject *self, PyObject *args)
 {
   char *bitmap, buffer[EB_SIZE_WIDE_FONT_48_XBM];
-  int width, height, size;
+  int width, height;
+  size_t size;
 
   if (!PyArg_ParseTuple(args, "s#ii", &bitmap, &size, &width, &height))
     return NULL;
@@ -1948,7 +1961,8 @@ static PyObject *
 py_eb_bitmap_to_xpm(PyObject *self, PyObject *args)
 {
   char *bitmap, buffer[EB_SIZE_WIDE_FONT_48_XPM];
-  int width, height, size;
+  int width, height;
+  size_t size;
 
   if (!PyArg_ParseTuple(args, "s#ii", &bitmap, &size, &width, &height))
     return NULL;
@@ -1962,7 +1976,8 @@ static PyObject *
 py_eb_bitmap_to_gif(PyObject *self, PyObject *args)
 {
   char *bitmap, buffer[EB_SIZE_WIDE_FONT_48_GIF];
-  int width, height, size;
+  int width, height;
+  size_t size;
 
   if (!PyArg_ParseTuple(args, "s#ii", &bitmap, &size, &width, &height))
     return NULL;
@@ -2154,7 +2169,8 @@ static PyObject *
 py_eb_narrow_font_size(PyObject *self, PyObject *args)
 {
   BookObject *book;
-  int size, status;
+  size_t size;
+  int status;
 
   if (!PyArg_ParseTuple(args, "O!", &BookType, &book))
     return NULL;
@@ -2172,7 +2188,8 @@ static PyObject *
 py_eb_narrow_font_size2(PyObject *self, PyObject *args)
 {
   EB_Font_Code font;
-  int size, status;
+  size_t size;
+  int status;
 
   if (!PyArg_ParseTuple(args, "i", &font))
     return NULL;
@@ -2227,7 +2244,8 @@ py_eb_narrow_font_character_bitmap(PyObject *self, PyObject *args)
 {
   BookObject *book;
   char buffer[EB_SIZE_NARROW_FONT_48];
-  int status, ch, size;
+  int status, ch;
+  size_t size;
 
   if (!PyArg_ParseTuple(args, "O!i", &BookType, &book, &ch))
     return NULL;
@@ -2328,7 +2346,8 @@ static PyObject *
 py_eb_wide_font_size(PyObject *self, PyObject *args)
 {
   BookObject *book;
-  int size, status;
+  size_t size;
+  int status;
 
   if (!PyArg_ParseTuple(args, "O!", &BookType, &book))
     return NULL;
@@ -2346,7 +2365,8 @@ static PyObject *
 py_eb_wide_font_size2(PyObject *self, PyObject *args)
 {
   EB_Font_Code font;
-  int size, status;
+  size_t size;
+  int status;
 
   if (!PyArg_ParseTuple(args, "i", &font))
     return NULL;
@@ -2401,7 +2421,8 @@ py_eb_wide_font_character_bitmap(PyObject *self, PyObject *args)
 {
   BookObject *book;
   char buffer[EB_SIZE_WIDE_FONT_48];
-  int status, ch, size;
+  int status, ch;
+  size_t size;
 
   if (!PyArg_ParseTuple(args, "O!i", &BookType, &book, &ch))
     return NULL;
@@ -2541,7 +2562,8 @@ py_eb_read_binary(PyObject *self, PyObject *args)
 {
   BookObject *book;
   char buffer[EB_SIZE_PAGE];
-  int status, size;
+  int status;
+  ssize_t size;
 
   if (!PyArg_ParseTuple(args, "O!i", &BookType, &book))
     return NULL;
