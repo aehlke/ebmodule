@@ -1,10 +1,13 @@
 /*
  *  ebmodule.c - EB library wapper module for Python
  *               Tamito KAJIYAMA <2 February 2001>
+ *               Modified (2.1) by Alex Ehlke, June 6, 2010:
+ *                 Added preliminary support for EB-4.3, and 
+ *                 eb_is_text_stopped function
  */
 
 static char *version = ""
-"$Id: ebmodule.c,v 1.5 2001/09/22 23:42:05 kajiyama Exp $";
+"$Id: ebmodule.c,v 2.1 2001/09/22 23:42:05 kajiyama Exp $";
 
 #include "Python.h"
 
@@ -1432,9 +1435,9 @@ static char py_eb_hook_euc_to_ascii__doc__[] = ""; static PyObject * py_eb_hook_
   return call_predefined_hook(eb_hook_euc_to_ascii, args);
 }
 
-static char py_eb_hook_stop_code__doc__[] = ""; static PyObject * py_eb_hook_stop_code(PyObject *self, PyObject *args) {
-  return call_predefined_hook(eb_hook_stop_code, args);
-}
+/*static char py_eb_hook_stop_code__doc__[] = ""; static PyObject * py_eb_hook_stop_code(PyObject *self, PyObject *args) {*/
+  /*return call_predefined_hook(eb_hook_stop_code, args);*/
+/*}*/
 
 static char py_eb_hook_narrow_character_text__doc__[] = ""; static PyObject * py_eb_hook_narrow_character_text(PyObject *self, PyObject *args) {
   return call_predefined_hook(eb_hook_narrow_character_text, args);
@@ -2564,6 +2567,20 @@ py_eb_unset_binary(PyObject *self, PyObject *args)
   return Py_None;
 }
 
+
+static char py_eb_is_text_stopped__doc__[] = "eb_is_text_stopped(book) => True/False if reached a stop code while reading text (see EBlib documentation).";
+
+static PyObject *
+py_eb_is_text_stopped(PyObject *self, PyObject *args)
+{
+  BookObject *book;
+
+  if (!PyArg_ParseTuple(args, "O!", &BookType, &book))
+      return NULL;
+
+  return PyInt_FromLong(eb_is_text_stopped(&book->book));
+}
+
 /* List of methods defined in the eb module */
 
 #define meth(name, func, doc) {name, (PyCFunction)func, METH_VARARGS, doc}
@@ -2785,9 +2802,9 @@ static struct PyMethodDef eb_module_methods[] = {
   meth("eb_hook_euc_to_ascii",
        py_eb_hook_euc_to_ascii,
        py_eb_hook_euc_to_ascii__doc__),
-  meth("eb_hook_stop_code",
-       py_eb_hook_stop_code,
-       py_eb_hook_stop_code__doc__),
+  /*meth("eb_hook_stop_code",*/
+       /*py_eb_hook_stop_code,*/
+       /*py_eb_hook_stop_code__doc__),*/
   meth("eb_hook_narrow_character_text",
        py_eb_hook_narrow_character_text,
        py_eb_hook_narrow_character_text__doc__),
@@ -2990,6 +3007,11 @@ static struct PyMethodDef eb_module_methods[] = {
        py_eb_unset_binary__doc__),
   /* filename.c */
 
+  /* my extensions */
+  meth("eb_is_text_stopped",
+       py_eb_is_text_stopped,
+       py_eb_is_text_stopped__doc__),
+
   {NULL, (PyCFunction)NULL, 0, NULL} /* sentinel */
 };
 
@@ -3038,13 +3060,13 @@ initeb(void)
   /* Special error states */  
   constI(d, "EB_SUBBOOK_INVALID",            EB_SUBBOOK_INVALID);
   constI(d, "EB_MULTI_INVALID",              EB_MULTI_INVALID);
-  constI(d, "EB_MULTI_ENTRY_INVALID",        EB_MULTI_ENTRY_INVALID);
+  /*constI(d, "EB_MULTI_ENTRY_INVALID",        EB_MULTI_ENTRY_INVALID);*/
   /* Sizes and limitations */
   constI(d, "EB_SIZE_PAGE",                  EB_SIZE_PAGE);
-  constI(d, "EB_SIZE_EB_CATALOG",            EB_SIZE_EB_CATALOG);
-  constI(d, "EB_SIZE_EPWING_CATALOG",        EB_SIZE_EPWING_CATALOG);
-  constI(d, "EB_SIZE_EBZIP_HEADER",          EB_SIZE_EBZIP_HEADER);
-  constI(d, "EB_SIZE_EBZIP_MARGIN",          EB_SIZE_EBZIP_MARGIN);
+  /*constI(d, "EB_SIZE_EB_CATALOG",            EB_SIZE_EB_CATALOG);*/
+  /*constI(d, "EB_SIZE_EPWING_CATALOG",        EB_SIZE_EPWING_CATALOG);*/
+  /*constI(d, "EB_SIZE_EBZIP_HEADER",          EB_SIZE_EBZIP_HEADER);*/
+  /*constI(d, "EB_SIZE_EBZIP_MARGIN",          EB_SIZE_EBZIP_MARGIN);*/
   constI(d, "EB_MAX_WORD_LENGTH",            EB_MAX_WORD_LENGTH);
   constI(d, "EB_MAX_EB_TITLE_LENGTH",        EB_MAX_EB_TITLE_LENGTH);
   constI(d, "EB_MAX_EPWING_TITLE_LENGTH",    EB_MAX_EPWING_TITLE_LENGTH);
@@ -3091,7 +3113,7 @@ initeb(void)
   constI(d, "EB_HOOK_NARROW_JISX0208",       EB_HOOK_NARROW_JISX0208);
   constI(d, "EB_HOOK_WIDE_JISX0208",         EB_HOOK_WIDE_JISX0208);
   constI(d, "EB_HOOK_GB2312",                EB_HOOK_GB2312);
-  constI(d, "EB_HOOK_STOP_CODE",             EB_HOOK_STOP_CODE);
+  /*constI(d, "EB_HOOK_STOP_CODE",             EB_HOOK_STOP_CODE);*/
   constI(d, "EB_HOOK_BEGIN_MONO_GRAPHIC",    EB_HOOK_BEGIN_MONO_GRAPHIC);
   constI(d, "EB_HOOK_END_MONO_GRAPHIC",      EB_HOOK_END_MONO_GRAPHIC); 
   constI(d, "EB_HOOK_BEGIN_GRAY_GRAPHIC",    EB_HOOK_BEGIN_GRAY_GRAPHIC);
@@ -3160,7 +3182,7 @@ initeb(void)
   constI(d, "EB_ERR_NO_SUCH_SEARCH",         EB_ERR_NO_SUCH_SEARCH);
   constI(d, "EB_ERR_NO_SUCH_HOOK",           EB_ERR_NO_SUCH_HOOK);
   constI(d, "EB_ERR_NO_SUCH_BINARY",         EB_ERR_NO_SUCH_BINARY);
-  constI(d, "EB_ERR_STOP_CODE",              EB_ERR_STOP_CODE);
+  /*constI(d, "EB_ERR_STOP_CODE",              EB_ERR_STOP_CODE);*/
   constI(d, "EB_ERR_DIFF_CONTENT",           EB_ERR_DIFF_CONTENT);
   constI(d, "EB_ERR_NO_PREV_SEARCH",         EB_ERR_NO_PREV_SEARCH);
   constI(d, "EB_ERR_NO_SUCH_MULTI_ID",       EB_ERR_NO_SUCH_MULTI_ID);
