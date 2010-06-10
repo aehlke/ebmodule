@@ -42,7 +42,33 @@ typedef struct {
   EB_Book book;
 } BookObject;
 
+/*static PyObject * Book_name(BookObject *self)*/
+/*{*/
+    /*PyObject *args, *result;*/
+    /*result = PyString_FromString("hello world!");*/
+    /*[>Py_DECREF(args);<]*/
+    
+    /*return result;*/
+/*}*/
+
+static PyObject *Book_text_status(BookObject *self)
+{
+    PyObject *result;
+    result = PyInt_FromLong(self->book.text_context.text_status);
+    return result;
+}
+static PyObject *Book_auto_stop_code(BookObject *self)
+{
+    return PyInt_FromLong(self->book.text_context.auto_stop_code);
+}
+
 static struct PyMethodDef Book_methods[] = {
+	/*{(char*)"helloworld", T_OBJECT_EX, offsetof(BookObject, book), 0, (char*)"blah"},*/
+/*{"name", (PyCFunction)Book_name, METH_NOARGS,*/
+     /*"Return the name, combining the first and last name"*/
+    /*},    */
+    {"text_status", (PyCFunction)Book_text_status, METH_NOARGS, "Return the book context's text status code."},
+    {"auto_stop_code", (PyCFunction)Book_auto_stop_code, METH_NOARGS, "Return the book context's auto stop code."},
   {NULL, NULL}  /* sentinel */
 };
 
@@ -73,6 +99,11 @@ book_getattr(BookObject *self, char *name)
   return Py_FindMethod(Book_methods, (PyObject *)self, name);
 }
 
+/*static PyMemberDef Book_members[] = {*/
+	/*{(char*)"helloworld", T_OBJECT_EX, offsetof(BookObject, book), 0, (char*)"blah"},*/
+	/*{NULL}  [> Sentinel <]*/
+/*};*/
+
 static char BookType__doc__[] =
 "A data structure for representing Book objects.";
 
@@ -98,7 +129,11 @@ static PyTypeObject BookType = {
   
   /* Space for future expansion */
   0L,0L,0L,0L,
-  BookType__doc__ /* Documentation string */
+  BookType__doc__, /* Documentation string */
+  0,0,0,0,0,0,
+  0,
+  /*Book_members [> tp_members <]*/
+  0,
 };
 
 /*********************************************************************
@@ -1784,7 +1819,10 @@ py_eb_forward_text(PyObject *self, PyObject *args)
                         &BookType, &book, &AppendixType, &appendix))
     return NULL;
   status = eb_forward_text(&book->book, &appendix->appendix);
-  if (status != EB_SUCCESS) {
+  if (status == EB_ERR_END_OF_CONTENT) {
+    PyErr_SetObject(EBError, error_object(status));
+    return NULL;
+  } else if (status != EB_SUCCESS) {
     PyErr_SetObject(EBError, error_object(status));
     return NULL;
   }
@@ -3150,6 +3188,8 @@ initeb(void)
   constI(d, "EB_HOOK_END_WAVE",              EB_HOOK_END_WAVE);
   constI(d, "EB_HOOK_BEGIN_MPEG",            EB_HOOK_BEGIN_MPEG);
   constI(d, "EB_HOOK_END_MPEG",              EB_HOOK_END_MPEG);
+  constI(d, "EB_HOOK_BEGIN_DECORATION",      EB_HOOK_BEGIN_DECORATION);
+  constI(d, "EB_HOOK_END_DECORATION",        EB_HOOK_END_DECORATION);
   /* [error.h] */
   /* Error codes */
   constI(d, "EB_SUCCESS",                    EB_SUCCESS);
@@ -3214,6 +3254,7 @@ initeb(void)
   constI(d, "EB_ERR_NO_CANDIDATES",          EB_ERR_NO_CANDIDATES);
   constI(d, "EB_NUMBER_OF_ERRORS",           EB_NUMBER_OF_ERRORS);
   constI(d, "EB_MAX_ERROR_MESSAGE_LENGTH",   EB_MAX_ERROR_MESSAGE_LENGTH);
+  constI(d, "EB_ERR_END_OF_CONTENT",         EB_ERR_END_OF_CONTENT);
   /* [font.h] */   
   /* Font types */
   constI(d, "EB_FONT_16",                    EB_FONT_16);
