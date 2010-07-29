@@ -113,7 +113,7 @@ static char BookType__doc__[] =
 "A data structure for representing Book objects.";
 
 static PyTypeObject BookType = {
-  PyObject_HEAD_INIT(&DEFERRED_ADDRESS(PyType_Type))
+  PyObject_HEAD_INIT(DEFERRED_ADDRESS(&PyType_Type))
   0,				/*ob_size*/
   "EB_Book",			/*tp_name*/
   sizeof(BookObject),		/*tp_basicsize*/
@@ -185,7 +185,7 @@ static char AppendixType__doc__[] =
 "A data structure for representing Appendix objects.";
 
 static PyTypeObject AppendixType = {
-  PyObject_HEAD_INIT(&DEFERRED_ADDRESS(PyType_Type))
+  PyObject_HEAD_INIT(DEFERRED_ADDRESS(&PyType_Type))
   0,				/*ob_size*/
   "EB_Appendix",		/*tp_name*/
   sizeof(AppendixObject),	/*tp_basicsize*/
@@ -256,7 +256,7 @@ static char HooksetType__doc__[] =
 "A data type for representing Hookset objects.";
 
 static PyTypeObject HooksetType = {
-  PyObject_HEAD_INIT(&DEFERRED_ADDRESS(PyType_Type))
+  PyObject_HEAD_INIT(DEFERRED_ADDRESS(&PyType_Type))
   0,				/*ob_size*/
   "EB_Hookset",			/*tp_name*/
   sizeof(HooksetObject),	/*tp_basicsize*/
