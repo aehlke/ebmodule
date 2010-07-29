@@ -2,13 +2,13 @@
 # Tamito KAJIYAMA <13 September 2001>
 # $Id: setup.py,v 1.3 2001/09/22 23:17:00 kajiyama Exp $
 
-#from distutils.core import setup, Extension
+from distutils.core import setup, Extension
 #from ez_setup import use_setuptools
 #use_setuptools()
 import sys
 
-from setuptools import setup
-from setuptools.extension import Extension
+#from setuptools import setup
+#from setuptools.extension import Extension
 
 IS_WINDOWS = sys.platform in ('win32', )
 
