@@ -1,13 +1,16 @@
 /*
  *  ebmodule.c - EB library wapper module for Python
  *               Tamito KAJIYAMA <2 February 2001>
+ *
+ *               Modified (2.4) by Alex Ehlke, July 28, 2010:
+ *                 Windows compatibility.
  *               Modified (2.2) by Alex Ehlke, June 6, 2010:
  *                 Added preliminary support for EB-4.3, and 
  *                 eb_is_text_stopped function
  */
 
 static char *version = ""
-"$Id: ebmodule.c,v 2.1 2001/09/22 23:42:05 kajiyama Exp $";
+"$Id: ebmodule.c,v 2.4 2001/09/22 23:42:05 kajiyama Exp $";
 
 #include "Python.h"
 
@@ -32,6 +35,8 @@ static PyObject *CallbackContext;
 
 #define error_object(status) \
         Py_BuildValue("(is)", status, eb_error_message(status))
+
+#define DEFERRED_ADDRESS(ADDR) 0
 
 /*********************************************************************
  *  Book object
@@ -108,7 +113,7 @@ static char BookType__doc__[] =
 "A data structure for representing Book objects.";
 
 static PyTypeObject BookType = {
-  PyObject_HEAD_INIT(&PyType_Type)
+  PyObject_HEAD_INIT(&DEFERRED_ADDRESS(PyType_Type))
   0,				/*ob_size*/
   "EB_Book",			/*tp_name*/
   sizeof(BookObject),		/*tp_basicsize*/
@@ -180,7 +185,7 @@ static char AppendixType__doc__[] =
 "A data structure for representing Appendix objects.";
 
 static PyTypeObject AppendixType = {
-  PyObject_HEAD_INIT(&PyType_Type)
+  PyObject_HEAD_INIT(&DEFERRED_ADDRESS(PyType_Type))
   0,				/*ob_size*/
   "EB_Appendix",		/*tp_name*/
   sizeof(AppendixObject),	/*tp_basicsize*/
@@ -251,7 +256,7 @@ static char HooksetType__doc__[] =
 "A data type for representing Hookset objects.";
 
 static PyTypeObject HooksetType = {
-  PyObject_HEAD_INIT(&PyType_Type)
+  PyObject_HEAD_INIT(&DEFERRED_ADDRESS(PyType_Type))
   0,				/*ob_size*/
   "EB_Hookset",			/*tp_name*/
   sizeof(HooksetObject),	/*tp_basicsize*/
