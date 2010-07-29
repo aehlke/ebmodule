@@ -14,7 +14,7 @@ IS_WINDOWS = sys.platform in ('win32', )
 
 if IS_WINDOWS:
     EBMODULE_C = 'src\ebmodule.c'
-    INCLUDE_DIRS = ['C:\Python26\include', 'C:\EBLibrary\include']
+    INCLUDE_DIRS = ['C:\Python26\include', 'C:\EBLibrary\include', '.\src']
     LIBRARY_DIRS = ['C:\EBLibrary\lib']
 else:
     EBMODULE_C = 'src/ebmodule.c'
