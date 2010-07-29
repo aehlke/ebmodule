@@ -5,6 +5,7 @@
 #from distutils.core import setup, Extension
 #from ez_setup import use_setuptools
 #use_setuptools()
+import sys
 
 from setuptools import setup
 from setuptools.extension import Extension
