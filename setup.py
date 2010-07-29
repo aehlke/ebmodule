@@ -3,8 +3,8 @@
 # $Id: setup.py,v 1.3 2001/09/22 23:17:00 kajiyama Exp $
 
 #from distutils.core import setup, Extension
-from ez_setup import use_setuptools
-use_setuptools()
+#from ez_setup import use_setuptools
+#use_setuptools()
 
 from setuptools import setup
 from setuptools.extension import Extension
