@@ -1,7 +1,7 @@
 /*
  *  ebmodule.c - EB library wapper module for Python
  *               Tamito KAJIYAMA <2 February 2001>
- *               Modified (2.1) by Alex Ehlke, June 6, 2010:
+ *               Modified (2.2) by Alex Ehlke, June 6, 2010:
  *                 Added preliminary support for EB-4.3, and 
  *                 eb_is_text_stopped function
  */
@@ -1486,9 +1486,9 @@ static char py_eb_hook_newline__doc__[] = ""; static PyObject * py_eb_hook_newli
   return call_predefined_hook(eb_hook_newline, args);
 }
 
-static char py_eb_hook_empty__doc__[] = ""; static PyObject * py_eb_hook_empty(PyObject *self, PyObject *args) {
+/*static char py_eb_hook_empty__doc__[] = ""; static PyObject * py_eb_hook_empty(PyObject *self, PyObject *args) {
   return call_predefined_hook(eb_hook_empty, args);
-}
+}*/
 
 /* text.c */
 
@@ -2874,9 +2874,9 @@ static struct PyMethodDef eb_module_methods[] = {
   meth("eb_hook_newline",
        py_eb_hook_newline,
        py_eb_hook_newline__doc__),
-  meth("eb_hook_empty",
+  /*meth("eb_hook_empty",
        py_eb_hook_empty,
-       py_eb_hook_empty__doc__),
+       py_eb_hook_empty__doc__),*/
   /* text.c */
   meth("EB_Hookset", /* eb_initialize_hookset(hookset) */
        py_eb_Hookset,

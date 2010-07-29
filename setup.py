@@ -2,16 +2,18 @@
 # Tamito KAJIYAMA <13 September 2001>
 # $Id: setup.py,v 1.3 2001/09/22 23:17:00 kajiyama Exp $
 
-from distutils.core import setup, Extension
+#from distutils.core import setup, Extension
+from setuptools import setup
+from setuptools.extension import Extension
+
 
 setup (name = "ebmodule",
-       version = "2.1",
+       version = "2.3",
        description = "A wrapper module of the EB library",
        author = "Tamito KAJIYAMA",
        author_email = "kajiyama@grad.sccs.chukyo-u.ac.jp",
        url = "http://pseudo.grad.sccs.chukyo-u.ac.jp/~kajiyama/python/",
-       py_modules = [
-           "eblib"],
+       py_modules = ["eblib"],
        ext_modules = [
            Extension("ebmodule", ["src/ebmodule.c"],
                      include_dirs=["/usr/local/include","./src"],
