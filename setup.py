@@ -16,6 +16,7 @@ setup (name = "ebmodule",
        py_modules = ["eblib"],
        ext_modules = [
            Extension("ebmodule", ["src/ebmodule.c"],
-                     include_dirs=["/usr/local/include","./src"],
+                     include_dirs=["/usr/local/include", "./src", "C:\Python26\include", "C:\EBLibrary\include"],
+                     library_dirs=["C:\EBLibrary\lib"],
                      #library_dirs=["/home/plateau/src/ebmodule-2.0/src/eb/.libs","/home/plateau/src/ebmodule-2.0/src/eb_lib/zlib/.libs"],
                      libraries=["eb", "z"])])
