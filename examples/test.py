@@ -150,9 +150,9 @@ def main():
         (EB_HOOK_WIDE_FONT,   hook_font)))
     try:
         eb_bind(book, dictdir)
-    except EBError, (error, message):
-        code = eb_error_string(error)
-        sys.stderr.write("Error: %s: %s\n" % (code, message))
+    except EBError as exc:
+        code = eb_error_string(exc.args[0])
+        sys.stderr.write("Error: %s: %s\n" % (code, exc.args[1]))
         sys.exit(1)
     eb_set_subbook(book, 0)
     if len(args) == 0:

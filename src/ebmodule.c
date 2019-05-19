@@ -33,6 +33,34 @@ static char *version = ""
 static PyObject *EBError;
 static PyObject *CallbackContext;
 
+#if PY_MAJOR_VERSION >= 3
+    #define PyInt_FromLong PyLong_FromLong
+#endif
+
+#if PY_MAJOR_VERSION >= 3
+    #define PyInt_Check PyLong_Check
+#endif
+
+#if PY_MAJOR_VERSION >= 3
+    #define PyInt_AsLong PyLong_AsLong
+#endif
+
+#if PY_MAJOR_VERSION >= 3
+    #define PyString_FromStringAndSize PyUnicode_FromStringAndSize
+#endif
+
+#if PY_MAJOR_VERSION >= 3
+    #define PyString_FromString PyUnicode_FromString
+#endif
+
+#if PY_MAJOR_VERSION >= 3
+    #define PyString_AsString PyUnicode_AsUTF8
+#endif
+
+#if PY_MAJOR_VERSION >= 3
+    #define PyString_Check PyUnicode_Check
+#endif
+
 #define error_object(status) \
         Py_BuildValue("(is)", status, eb_error_message(status))
 
@@ -77,7 +105,7 @@ static struct PyMethodDef Book_methods[] = {
   {NULL, NULL}  /* sentinel */
 };
 
-staticforward PyTypeObject BookType;
+static PyTypeObject BookType;
 
 static BookObject *
 book_new(void)
@@ -101,7 +129,7 @@ book_dealloc(BookObject *self)
 static PyObject *
 book_getattr(BookObject *self, char *name)
 {
-  return Py_FindMethod(Book_methods, (PyObject *)self, name);
+  return PyObject_GenericGetAttr((PyObject *) self, PyString_FromString(name));
 }
 
 /*static PyMemberDef Book_members[] = {*/
@@ -113,8 +141,7 @@ static char BookType__doc__[] =
 "A data structure for representing Book objects.";
 
 static PyTypeObject BookType = {
-  PyObject_HEAD_INIT(DEFERRED_ADDRESS(&PyType_Type))
-  0,				/*ob_size*/
+  PyVarObject_HEAD_INIT(DEFERRED_ADDRESS(&PyType_Type), 0)
   "EB_Book",			/*tp_name*/
   sizeof(BookObject),		/*tp_basicsize*/
   0,				/*tp_itemsize*/
@@ -123,7 +150,6 @@ static PyTypeObject BookType = {
   (printfunc)0,			/*tp_print*/
   (getattrfunc)book_getattr,	/*tp_getattr*/
   (setattrfunc)0,		/*tp_setattr*/
-  (cmpfunc)0,			/*tp_compare*/
   (reprfunc)0,			/*tp_repr*/
   0,				/*tp_as_number*/
   0,				/*tp_as_sequence*/
@@ -154,7 +180,7 @@ static struct PyMethodDef Appendix_methods[] = {
   {NULL, NULL}  /* sentinel */
 };
 
-staticforward PyTypeObject AppendixType;
+static PyTypeObject AppendixType;
 
 static AppendixObject *
 appendix_new(void)
@@ -178,15 +204,14 @@ appendix_dealloc(AppendixObject *self)
 static PyObject *
 appendix_getattr(AppendixObject *self, char *name)
 {
-  return Py_FindMethod(Appendix_methods, (PyObject *)self, name);
+  return PyObject_GenericGetAttr((PyObject *) self, PyString_FromString(name));
 }
 
 static char AppendixType__doc__[] =
 "A data structure for representing Appendix objects.";
 
 static PyTypeObject AppendixType = {
-  PyObject_HEAD_INIT(DEFERRED_ADDRESS(&PyType_Type))
-  0,				/*ob_size*/
+  PyVarObject_HEAD_INIT(DEFERRED_ADDRESS(&PyType_Type), 0)
   "EB_Appendix",		/*tp_name*/
   sizeof(AppendixObject),	/*tp_basicsize*/
   0,				/*tp_itemsize*/
@@ -195,7 +220,6 @@ static PyTypeObject AppendixType = {
   (printfunc)0,			/*tp_print*/
   (getattrfunc)appendix_getattr,/*tp_getattr*/
   (setattrfunc)0,		/*tp_setattr*/
-  (cmpfunc)0,			/*tp_compare*/
   (reprfunc)0,			/*tp_repr*/
   0,				/*tp_as_number*/
   0,				/*tp_as_sequence*/
@@ -223,7 +247,7 @@ static struct PyMethodDef Hookset_methods[] = {
   {NULL, NULL}  /* sentinel */
 };
 
-staticforward PyTypeObject HooksetType;
+static PyTypeObject HooksetType;
 
 static HooksetObject *
 hookset_new(void)
@@ -249,15 +273,14 @@ hookset_dealloc(HooksetObject *self)
 static PyObject *
 hookset_getattr(HooksetObject *self, char *name)
 {
-  return Py_FindMethod(Hookset_methods, (PyObject *)self, name);
+  return PyObject_GenericGetAttr((PyObject *) self, PyString_FromString(name));
 }
 
 static char HooksetType__doc__[] =
 "A data type for representing Hookset objects.";
 
 static PyTypeObject HooksetType = {
-  PyObject_HEAD_INIT(DEFERRED_ADDRESS(&PyType_Type))
-  0,				/*ob_size*/
+  PyVarObject_HEAD_INIT(DEFERRED_ADDRESS(&PyType_Type), 0)
   "EB_Hookset",			/*tp_name*/
   sizeof(HooksetObject),	/*tp_basicsize*/
   0,				/*tp_itemsize*/
@@ -266,7 +289,6 @@ static PyTypeObject HooksetType = {
   (printfunc)0,			/*tp_print*/
   (getattrfunc)hookset_getattr,	/*tp_getattr*/
   (setattrfunc)0,		/*tp_setattr*/
-  (cmpfunc)0,			/*tp_compare*/
   (reprfunc)0,			/*tp_repr*/
   0,				/*tp_as_number*/
   0,				/*tp_as_sequence*/
@@ -3084,14 +3106,33 @@ static struct PyMethodDef eb_module_methods[] = {
 
 static char eb_module_documentation[] = "";
 
+#if PY_MAJOR_VERSION >= 3
+PyMODINIT_FUNC
+PyInit_eb(void)
+#else
 void
 initeb(void)
+#endif
 {
   PyObject *m, *d;
 
+#if PY_MAJOR_VERSION >= 3
+  static struct PyModuleDef moduledef = {
+    PyModuleDef_HEAD_INIT,
+    "eb",     /* m_name */
+    eb_module_documentation,  /* m_doc */
+    -1,                  /* m_size */
+    eb_module_methods    /* m_methods */
+  };
+#endif
+
+#if PY_MAJOR_VERSION >= 3
+  m = PyModule_Create(&moduledef);
+#else
   /* Create the module and add the functions */
   m = Py_InitModule4("eb", eb_module_methods, eb_module_documentation,
 		     (PyObject*)NULL, PYTHON_API_VERSION);
+#endif
 
   /* Add some symbolic constants to the module */
   d = PyModule_GetDict(m);
@@ -3320,4 +3361,5 @@ initeb(void)
   /* Check for errors */
   if (PyErr_Occurred())
     Py_FatalError("can't initialize the eb module");
+  return m;
 }

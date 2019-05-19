@@ -259,9 +259,9 @@ def test():
     eb = EBTest(sys.argv[1])
     if argc == 2:
         for subbook in eb.subbook_list():
-            print "#%d. %s (%s)" % (subbook,
+            print ("#%d. %s (%s)" % (subbook,
                                     eb.subbook_title(subbook),
-                                    eb.subbook_directory(subbook))
+                                    eb.subbook_directory(subbook)))
     else:
         eb.set_subbook(int(sys.argv[2]))
         word = sys.argv[3]
@@ -274,9 +274,9 @@ def test():
         else:
             func = eb.search_exactword
         for hit in func(word):
-            print "-" * 40
-            print hit.heading()
-            print hit.text()
+            print ("-" * 40)
+            print (hit.heading())
+            print (hit.text())
     eb_finalize_library()
 
 if __name__ == "__main__":
