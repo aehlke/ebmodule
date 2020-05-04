@@ -544,7 +544,7 @@ py_eb_search_exactword(PyObject *self, PyObject *args)
   const char *query;
   int status;
 
-  if (!PyArg_ParseTuple(args, "O!s", &BookType, &book, &query))
+  if (!PyArg_ParseTuple(args, "O!y", &BookType, &book, &query))
     return NULL;
   status = eb_search_exactword(&book->book, query);
   if (status != EB_SUCCESS) {
@@ -1722,7 +1722,7 @@ py_eb_read_text(PyObject *self, PyObject *args)
     PyErr_SetObject(EBError, error_object(status));
     return NULL;
   }
-  return PyString_FromStringAndSize(buffer, len);
+  return PyBytes_FromStringAndSize(buffer, len);
 }
 
 static char py_eb_read_heading__doc__[] = "eb_read_heading(book, appendix, hookset) => string Read a data chunk of the entry heading.  In order to read all the data chunks, applications have to call this function several times until it returns a null string.  Raise EBError if failed.";
@@ -1753,7 +1753,7 @@ py_eb_read_heading(PyObject *self, PyObject *args)
     PyErr_SetObject(EBError, error_object(status));
     return NULL;
   }
-  return PyString_FromStringAndSize(buffer, len);
+  return PyBytes_FromStringAndSize(buffer, len);
 }
 
 static char py_eb_read_rawtext__doc__[] = "eb_read_rawtext(book, int) => string Return the given number of raw characters read from the current file position.  Raise EBError if failed.";
@@ -1776,7 +1776,7 @@ py_eb_read_rawtext(PyObject *self, PyObject *args)
     PyErr_SetObject(EBError, error_object(status));
     return NULL;
   }
-  string = PyString_FromStringAndSize(buffer, len);
+  string = PyBytes_FromStringAndSize(buffer, len);
   free(buffer);
   return string;
 }
