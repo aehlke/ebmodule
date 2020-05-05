@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
 #
 #  chujiten.py - an add-on program for xyaku
 #                Tamito KAJIYAMA <12 September 2001>

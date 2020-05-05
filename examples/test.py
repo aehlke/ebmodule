@@ -19,17 +19,17 @@ import re
 def get_content(book, appendix, hookset, folded, packed):
     buffer = []
     while 1:
-        data = eb_read_text(book, appendix, hookset, None)
+        data = eb_read_text(book, appendix, hookset, None).decode('euc-jp', errors='ignore')
         if not data:
             break
-        data = string.replace(data, "→§", "")
-        data = string.replace(data, "＝→", "＝")
-        data = string.replace(data, "⇒→", "⇒")
-        data = string.replace(data, "⇔→", "⇔")
+        data = data.replace("→§", "")
+        data = data.replace("＝→", "＝")
+        data = data.replace("⇒→", "⇒")
+        data = data.replace("⇔→", "⇔")
         buffer.append(data)
-    data = string.join(buffer, "")
+    data = "".join(buffer)
     if packed:
-        data = string.replace(data, "\n", "") + "\n"
+        data = data.replace("\n", "") + "\n"
     if folded < 0:
         return data
     i = end = 0
@@ -150,18 +150,18 @@ def main():
         (EB_HOOK_WIDE_FONT,   hook_font)))
     try:
         eb_bind(book, dictdir)
-    except EBError, (error, message):
-        code = eb_error_string(error)
-        sys.stderr.write("Error: %s: %s\n" % (code, message))
+    except EBError as exc:
+        code = eb_error_string(exc.args[0])
+        sys.stderr.write("Error: %s: %s\n" % (code, exc.args[1]))
         sys.exit(1)
     eb_set_subbook(book, 0)
     if len(args) == 0:
-        word = string.strip(sys.stdin.read())
+        word = sys.stdin.read().strip()
     else:
         word = string.join(args)
     for word in make_candidates(word):
         found = 0
-        eb_search_exactword(book, unicode(word,'utf-8').encode('euc-jp'))
+        eb_search_exactword(book, word.encode('euc-jp'))
         while 1:
             hitlist = eb_hit_list(book)
             if not hitlist:
@@ -169,10 +169,10 @@ def main():
             found = 1
             for heading, text in hitlist:
                 eb_seek_text(book, text)
-                content = get_content(book, appendix, hookset, folded, packed)
-                if string.strip(content):
+                content = get_content(book, appendix, hookset, folded, packed).strip()
+                if content:
                     #sys.stdout.write(unicode(content,'euc-jp',errors='ignore'))
-                    print(unicode(content,'euc-jp',errors='ignore'))
+                    print(content)
         if found:
             break
     eb_finalize_library()
