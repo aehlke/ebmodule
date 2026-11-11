@@ -4,7 +4,7 @@
 
 from eb import *
 
-import string
+
 
 class EB_Hit:
     def __init__(self, book, subbook, position):
@@ -112,6 +112,8 @@ class EB:
         ##print "handle_stop_code: code=%d, argv=%s" % (code, repr(argv))
         return eb_hook_stop_code(book, appendix, container, code, argv)
     def write_text(self, text):
+        if isinstance(text, str):
+            text = text.encode("euc_jp")
         eb_write_text(self.book, text)
     def get_content(self, subbook, position, container, func):
         # save current subbook
@@ -120,18 +122,18 @@ class EB:
             self.set_subbook(subbook)
         else:
             current_subbook = None
-        # get content at the specified subbook/position
-        eb_seek_text(self.book, position)
-        buffer = []
-        while 1:
-            data = func(self.book, self.appendix, self.hookset, container)
-            if not data:
-                break
-            buffer.append(data)
-        # restore current subbook
-        if current_subbook is not None:
-            self.set_subbook(current_subbook)
-        return string.join(buffer, '')
+        try:
+            eb_seek_text(self.book, position)
+            buffer = []
+            while 1:
+                data = func(self.book, self.appendix, self.hookset, container)
+                if not data:
+                    break
+                buffer.append(data)
+            return b''.join(buffer)
+        finally:
+            if current_subbook is not None:
+                self.set_subbook(current_subbook)
     # callbacks
     def hook_newline(self, container):
         self.write_text("\n")
@@ -223,6 +225,8 @@ class EB:
     def search_endword(self, word):
         return self.do_search(eb_search_endword, word)
     def do_search(self, func, word):
+        if isinstance(word, str):
+            word = word.encode("euc_jp")
         func(self.book, word)
         buffer = []
         while 1:
@@ -259,9 +263,9 @@ def test():
     eb = EBTest(sys.argv[1])
     if argc == 2:
         for subbook in eb.subbook_list():
-            print "#%d. %s (%s)" % (subbook,
-                                    eb.subbook_title(subbook),
-                                    eb.subbook_directory(subbook))
+            print("#%d. %s (%s)" % (subbook,
+                                    eb.subbook_title(subbook).decode("euc_jp"),
+                                    eb.subbook_directory(subbook).decode("euc_jp")))
     else:
         eb.set_subbook(int(sys.argv[2]))
         word = sys.argv[3]
@@ -274,9 +278,9 @@ def test():
         else:
             func = eb.search_exactword
         for hit in func(word):
-            print "-" * 40
-            print hit.heading()
-            print hit.text()
+            print("-" * 40)
+            print(hit.heading().decode("euc_jp"))
+            print(hit.text().decode("euc_jp"))
     eb_finalize_library()
 
 if __name__ == "__main__":

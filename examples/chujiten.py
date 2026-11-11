@@ -1,54 +1,50 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 #
 #  chujiten.py - an add-on program for xyaku
 #                Tamito KAJIYAMA <12 September 2001>
 #
 #  $Id: chujiten.py,v 1.3 2001/09/22 23:46:51 kajiyama Exp $
 #
-#  NOTE: This file contains Japanese characters (EUC-JP).
+#  NOTE: Source is UTF-8; EB dictionary bytes are decoded explicitly as EUC-JP.
 #
 
 from eb import *
 
 import getopt
-import string
+import unicodedata
 import sys
 import re
 
 def get_content(book, appendix, hookset, folded, packed):
-    buffer = []
-    while 1:
+    chunks = []
+    while True:
         data = eb_read_text(book, appendix, hookset, None)
         if not data:
             break
-        data = string.replace(data, "¢™°¯", "")
-        data = string.replace(data, "°·¢™", "°·")
-        data = string.replace(data, "¢Õ¢™", "¢Õ")
-        data = string.replace(data, "¢Œ¢™", "¢Œ")
-        buffer.append(data)
-    data = string.join(buffer, "")
+        chunks.append(data)
+    data = b"".join(chunks).decode("euc_jp")
+    for old, new in [("‚Üí¬ß", ""), ("Ôºù‚Üí", "Ôºù"), ("‚áí‚Üí", "‚áí"), ("‚áî‚Üí", "‚áî")]:
+        data = data.replace(old, new)
     if packed:
-        data = string.replace(data, "\n", "") + "\n"
-    if folded < 0:
+        data = data.replace("\n", "") + "\n"
+    if folded <= 0:
         return data
-    i = end = 0
-    j = len(data)
-    buffer = []
-    while i < j:
-        if data[i] < "\200":
-            n = 1
-        else:
-            n = 2
-        if data[i] == "\n":
-            buffer.append(data[end:i])
-            end = i + 1
-        elif i - end + n > folded:
-            buffer.append(data[end:i])
-            end = i
-        i = i + n
-    if end < j - 1:
-        buffer.append(data[end:])
-    return string.join(buffer, "\n") + "\n"
+    lines, line, width = [], [], 0
+    for character in data:
+        columns = 2 if unicodedata.east_asian_width(character) in ("W", "F") else 1
+        if character == "\n":
+            lines.append("".join(line))
+            line, width = [], 0
+            continue
+        if line and width + columns > folded:
+            lines.append("".join(line))
+            line, width = [], 0
+        line.append(character)
+        width += columns
+    if line:
+        lines.append("".join(line))
+    return "\n".join(lines) + ("\n" if lines else "")
 
 def hook_font(book, appendix, container, code, argv):
     gaiji = {
@@ -56,11 +52,11 @@ def hook_font(book, appendix, container, code, argv):
         (EB_HOOK_NARROW_FONT, 0xa122): "** ",
         (EB_HOOK_NARROW_FONT, 0xa123): "*** ",
         (EB_HOOK_NARROW_FONT, 0xa124): "o ",
-        (EB_HOOK_NARROW_FONT, 0xa126): "°‘",
-        (EB_HOOK_NARROW_FONT, 0xa127): "°’",
-        (EB_HOOK_NARROW_FONT, 0xa128): "°Ã",
-        (EB_HOOK_NARROW_FONT, 0xa129): "°Õ",
-        (EB_HOOK_NARROW_FONT, 0xa12a): "°¡",
+        (EB_HOOK_NARROW_FONT, 0xa126): "„Ää",
+        (EB_HOOK_NARROW_FONT, 0xa127): "„Äã",
+        (EB_HOOK_NARROW_FONT, 0xa128): "„Äî",
+        (EB_HOOK_NARROW_FONT, 0xa129): "„Äï",
+        (EB_HOOK_NARROW_FONT, 0xa12a): "ÔΩû",
         (EB_HOOK_NARROW_FONT, 0xa167): "a",
         (EB_HOOK_NARROW_FONT, 0xa168): "e",
         (EB_HOOK_NARROW_FONT, 0xa169): "i",
@@ -74,31 +70,31 @@ def hook_font(book, appendix, container, code, argv):
         (EB_HOOK_NARROW_FONT, 0xa17e): "o",
         (EB_HOOK_NARROW_FONT, 0xa221): "u",
         (EB_HOOK_NARROW_FONT, 0xa233): ":",
-        (EB_HOOK_WIDE_FONT, 0xa34e): "®¨",
-        (EB_HOOK_WIDE_FONT, 0xa321): "[Ãæ]",
-        (EB_HOOK_WIDE_FONT, 0xa322): "[¬Â]",
-        (EB_HOOK_WIDE_FONT, 0xa323): "[∑¡]",
-        (EB_HOOK_WIDE_FONT, 0xa324): "[∆∞]",
-        (EB_HOOK_WIDE_FONT, 0xa325): "[…˚]",
-        (EB_HOOK_WIDE_FONT, 0xa327): "[¡∞]",
+        (EB_HOOK_WIDE_FONT, 0xa34e): "‚îÅ",
+        (EB_HOOK_WIDE_FONT, 0xa321): "[Âêç]",
+        (EB_HOOK_WIDE_FONT, 0xa322): "[‰ª£]",
+        (EB_HOOK_WIDE_FONT, 0xa323): "[ÂΩ¢]",
+        (EB_HOOK_WIDE_FONT, 0xa324): "[Âãï]",
+        (EB_HOOK_WIDE_FONT, 0xa325): "[ÂâØ]",
+        (EB_HOOK_WIDE_FONT, 0xa327): "[Ââç]",
         (EB_HOOK_WIDE_FONT, 0xa32f): "[U]",
         (EB_HOOK_WIDE_FONT, 0xa330): "[C]",
-        (EB_HOOK_WIDE_FONT, 0xa332): "( £)",
+        (EB_HOOK_WIDE_FONT, 0xa332): "(Ë§á)",
         (EB_HOOK_WIDE_FONT, 0xa333): "[A]",
         (EB_HOOK_WIDE_FONT, 0xa334): "[P]",
-        (EB_HOOK_WIDE_FONT, 0xa335): "(º´)",
-        (EB_HOOK_WIDE_FONT, 0xa336): "(¬æ)",
-        (EB_HOOK_WIDE_FONT, 0xa337): "[¿Æ",
-        (EB_HOOK_WIDE_FONT, 0xa338): "∂Á]",
-        (EB_HOOK_WIDE_FONT, 0xa32c): "[¿‹",
-        (EB_HOOK_WIDE_FONT, 0xa32d): "∆¨]",
-        (EB_HOOK_WIDE_FONT, 0xa32e): "»¯]",
-        (EB_HOOK_WIDE_FONT, 0xa339): "°¯",
-        (EB_HOOK_WIDE_FONT, 0xa33a): "°¯",
-        (EB_HOOK_WIDE_FONT, 0xa33c): "°¯",
-        (EB_HOOK_WIDE_FONT, 0xa34f): "¢Œ",
+        (EB_HOOK_WIDE_FONT, 0xa335): "(Ëá™)",
+        (EB_HOOK_WIDE_FONT, 0xa336): "(‰ªñ)",
+        (EB_HOOK_WIDE_FONT, 0xa337): "[Êàê",
+        (EB_HOOK_WIDE_FONT, 0xa338): "Âè•]",
+        (EB_HOOK_WIDE_FONT, 0xa32c): "[Êé•",
+        (EB_HOOK_WIDE_FONT, 0xa32d): "È†≠]",
+        (EB_HOOK_WIDE_FONT, 0xa32e): "Â∞æ]",
+        (EB_HOOK_WIDE_FONT, 0xa339): "¬ß",
+        (EB_HOOK_WIDE_FONT, 0xa33a): "¬ß",
+        (EB_HOOK_WIDE_FONT, 0xa33c): "¬ß",
+        (EB_HOOK_WIDE_FONT, 0xa34f): "‚áî",
         }
-    eb_write_text_string(book, gaiji.get((code, argv[0]), "?"))
+    eb_write_text_string(book, gaiji.get((code, argv[0]), "?").encode("euc_jp"))
     return EB_SUCCESS
 
 def make_candidates(word):
@@ -149,18 +145,19 @@ def main():
         (EB_HOOK_WIDE_FONT,   hook_font)))
     try:
         eb_bind(book, dictdir)
-    except EBError, (error, message):
+    except EBError as exception:
+        error, message = exception.args
         code = eb_error_string(error)
         sys.stderr.write("Error: %s: %s\n" % (code, message))
         sys.exit(1)
     eb_set_subbook(book, 0)
     if len(args) == 0:
-        word = string.strip(sys.stdin.read())
+        word = sys.stdin.read().strip()
     else:
-        word = string.join(args)
+        word = " ".join(args)
     for word in make_candidates(word):
         found = 0
-        eb_search_exactword(book, word)
+        eb_search_exactword(book, word.encode("euc_jp"))
         while 1:
             hitlist = eb_hit_list(book)
             if not hitlist:
@@ -169,7 +166,7 @@ def main():
             for heading, text in hitlist:
                 eb_seek_text(book, text)
                 content = get_content(book, appendix, hookset, folded, packed)
-                if string.strip(content):
+                if content.strip():
                     sys.stdout.write(content)
         if found:
             break

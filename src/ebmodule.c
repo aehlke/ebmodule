@@ -12,7 +12,18 @@
 static char *version = ""
 "$Id: ebmodule.c,v 2.4 2001/09/22 23:42:05 kajiyama Exp $";
 
+#define PY_SSIZE_T_CLEAN
 #include "Python.h"
+#include <limits.h>
+
+/* Python 3: EB-encoded text and binary buffers are bytes, never implicit UTF-8. */
+#define PyInt_FromLong PyLong_FromLong
+#define PyInt_Check PyLong_Check
+#define PyInt_AsLong PyLong_AsLong
+#define PyString_FromStringAndSize PyBytes_FromStringAndSize
+#define PyString_FromString PyBytes_FromString
+#define PyString_Check PyBytes_Check
+#define PyString_AsString PyBytes_AsString
 
 #include "eb/eb.h"
 #include "eb/appendix.h"
@@ -33,8 +44,15 @@ static char *version = ""
 static PyObject *EBError;
 static PyObject *CallbackContext;
 
-#define error_object(status) \
-        Py_BuildValue("(is)", status, eb_error_message(status))
+static void
+set_eb_error(int status)
+{
+  PyObject *value = Py_BuildValue("(is)", status, eb_error_message(status));
+  if (value != NULL) {
+    PyErr_SetObject(EBError, value);
+    Py_DECREF(value);
+  }
+}
 
 #define DEFERRED_ADDRESS(ADDR) 0
 
@@ -56,13 +74,17 @@ typedef struct {
     /*return result;*/
 /*}*/
 
-static PyObject *Book_text_status(BookObject *self)
+static PyObject *Book_text_status(BookObject *self, PyObject *unused)
 {
     PyObject *result;
+#if EB_VERSION_MAJOR < 4
+    result = PyInt_FromLong(self->book.text_context.code);
+#else
     result = PyInt_FromLong(self->book.text_context.text_status);
+#endif
     return result;
 }
-static PyObject *Book_auto_stop_code(BookObject *self)
+static PyObject *Book_auto_stop_code(BookObject *self, PyObject *unused)
 {
     return PyInt_FromLong(self->book.text_context.auto_stop_code);
 }
@@ -72,12 +94,12 @@ static struct PyMethodDef Book_methods[] = {
 /*{"name", (PyCFunction)Book_name, METH_NOARGS,*/
      /*"Return the name, combining the first and last name"*/
     /*},    */
-    {"text_status", (PyCFunction)Book_text_status, METH_NOARGS, "Return the book context's text status code."},
+    {"text_status", (PyCFunction)Book_text_status, METH_NOARGS, "Return the native text status (content mode on EB 3.x)."},
     {"auto_stop_code", (PyCFunction)Book_auto_stop_code, METH_NOARGS, "Return the book context's auto stop code."},
   {NULL, NULL}  /* sentinel */
 };
 
-staticforward PyTypeObject BookType;
+static PyTypeObject BookType;
 
 static BookObject *
 book_new(void)
@@ -95,14 +117,9 @@ static void
 book_dealloc(BookObject *self)
 {
   eb_finalize_book(&self->book);
-  PyMem_DEL(self);
+  PyObject_Del(self);
 }
 
-static PyObject *
-book_getattr(BookObject *self, char *name)
-{
-  return Py_FindMethod(Book_methods, (PyObject *)self, name);
-}
 
 /*static PyMemberDef Book_members[] = {*/
 	/*{(char*)"helloworld", T_OBJECT_EX, offsetof(BookObject, book), 0, (char*)"blah"},*/
@@ -113,32 +130,13 @@ static char BookType__doc__[] =
 "A data structure for representing Book objects.";
 
 static PyTypeObject BookType = {
-  PyObject_HEAD_INIT(DEFERRED_ADDRESS(&PyType_Type))
-  0,				/*ob_size*/
-  "EB_Book",			/*tp_name*/
-  sizeof(BookObject),		/*tp_basicsize*/
-  0,				/*tp_itemsize*/
-  /* methods */
-  (destructor)book_dealloc,	/*tp_dealloc*/
-  (printfunc)0,			/*tp_print*/
-  (getattrfunc)book_getattr,	/*tp_getattr*/
-  (setattrfunc)0,		/*tp_setattr*/
-  (cmpfunc)0,			/*tp_compare*/
-  (reprfunc)0,			/*tp_repr*/
-  0,				/*tp_as_number*/
-  0,				/*tp_as_sequence*/
-  0,				/*tp_as_mapping*/
-  (hashfunc)0,			/*tp_hash*/
-  (ternaryfunc)0,		/*tp_call*/
-  (reprfunc)0,			/*tp_str*/
-  
-  /* Space for future expansion */
-  0L,0L,0L,0L,
-  BookType__doc__, /* Documentation string */
-  0,0,0,0,0,0,
-  0,
-  /*Book_members [> tp_members <]*/
-  0,
+  PyVarObject_HEAD_INIT(NULL, 0)
+  .tp_name = "eb.EB_Book",
+  .tp_basicsize = sizeof(BookObject),
+  .tp_dealloc = (destructor)book_dealloc,
+  .tp_flags = Py_TPFLAGS_DEFAULT,
+  .tp_methods = Book_methods,
+  .tp_doc = BookType__doc__,
 };
 
 /*********************************************************************
@@ -154,7 +152,7 @@ static struct PyMethodDef Appendix_methods[] = {
   {NULL, NULL}  /* sentinel */
 };
 
-staticforward PyTypeObject AppendixType;
+static PyTypeObject AppendixType;
 
 static AppendixObject *
 appendix_new(void)
@@ -172,41 +170,21 @@ static void
 appendix_dealloc(AppendixObject *self)
 {
   eb_finalize_appendix(&self->appendix);
-  PyMem_DEL(self);
+  PyObject_Del(self);
 }
 
-static PyObject *
-appendix_getattr(AppendixObject *self, char *name)
-{
-  return Py_FindMethod(Appendix_methods, (PyObject *)self, name);
-}
 
 static char AppendixType__doc__[] =
 "A data structure for representing Appendix objects.";
 
 static PyTypeObject AppendixType = {
-  PyObject_HEAD_INIT(DEFERRED_ADDRESS(&PyType_Type))
-  0,				/*ob_size*/
-  "EB_Appendix",		/*tp_name*/
-  sizeof(AppendixObject),	/*tp_basicsize*/
-  0,				/*tp_itemsize*/
-  /* methods */
-  (destructor)appendix_dealloc,	/*tp_dealloc*/
-  (printfunc)0,			/*tp_print*/
-  (getattrfunc)appendix_getattr,/*tp_getattr*/
-  (setattrfunc)0,		/*tp_setattr*/
-  (cmpfunc)0,			/*tp_compare*/
-  (reprfunc)0,			/*tp_repr*/
-  0,				/*tp_as_number*/
-  0,				/*tp_as_sequence*/
-  0,				/*tp_as_mapping*/
-  (hashfunc)0,			/*tp_hash*/
-  (ternaryfunc)0,		/*tp_call*/
-  (reprfunc)0,			/*tp_str*/
-  
-  /* Space for future expansion */
-  0L,0L,0L,0L,
-  AppendixType__doc__ /* Documentation string */
+  PyVarObject_HEAD_INIT(NULL, 0)
+  .tp_name = "eb.EB_Appendix",
+  .tp_basicsize = sizeof(AppendixObject),
+  .tp_dealloc = (destructor)appendix_dealloc,
+  .tp_flags = Py_TPFLAGS_DEFAULT,
+  .tp_methods = Appendix_methods,
+  .tp_doc = AppendixType__doc__,
 };
 
 /*********************************************************************
@@ -223,61 +201,64 @@ static struct PyMethodDef Hookset_methods[] = {
   {NULL, NULL}  /* sentinel */
 };
 
-staticforward PyTypeObject HooksetType;
+static PyTypeObject HooksetType;
 
 static HooksetObject *
 hookset_new(void)
 {
   HooksetObject *self;
 	
-  self = PyObject_NEW(HooksetObject, &HooksetType);
+  self = PyObject_GC_New(HooksetObject, &HooksetType);
   if (self == NULL)
     return NULL;
   eb_initialize_hookset(&self->hookset);
   self->callbacks = PyDict_New();
+  if (self->callbacks == NULL) {
+    eb_finalize_hookset(&self->hookset);
+    PyObject_GC_Del(self);
+    return NULL;
+  }
+  PyObject_GC_Track(self);
   return self;
+}
+
+static int
+hookset_traverse(HooksetObject *self, visitproc visit, void *arg)
+{
+  Py_VISIT(self->callbacks);
+  return 0;
+}
+
+static int
+hookset_clear(HooksetObject *self)
+{
+  Py_CLEAR(self->callbacks);
+  return 0;
 }
 
 static void
 hookset_dealloc(HooksetObject *self)
 {
+  PyObject_GC_UnTrack(self);
   eb_finalize_hookset(&self->hookset);
-  Py_DECREF(self->callbacks);
-  PyMem_DEL(self);
+  hookset_clear(self);
+  PyObject_GC_Del(self);
 }
 
-static PyObject *
-hookset_getattr(HooksetObject *self, char *name)
-{
-  return Py_FindMethod(Hookset_methods, (PyObject *)self, name);
-}
 
 static char HooksetType__doc__[] =
 "A data type for representing Hookset objects.";
 
 static PyTypeObject HooksetType = {
-  PyObject_HEAD_INIT(DEFERRED_ADDRESS(&PyType_Type))
-  0,				/*ob_size*/
-  "EB_Hookset",			/*tp_name*/
-  sizeof(HooksetObject),	/*tp_basicsize*/
-  0,				/*tp_itemsize*/
-  /* methods */
-  (destructor)hookset_dealloc,	/*tp_dealloc*/
-  (printfunc)0,			/*tp_print*/
-  (getattrfunc)hookset_getattr,	/*tp_getattr*/
-  (setattrfunc)0,		/*tp_setattr*/
-  (cmpfunc)0,			/*tp_compare*/
-  (reprfunc)0,			/*tp_repr*/
-  0,				/*tp_as_number*/
-  0,				/*tp_as_sequence*/
-  0,				/*tp_as_mapping*/
-  (hashfunc)0,			/*tp_hash*/
-  (ternaryfunc)0,		/*tp_call*/
-  (reprfunc)0,			/*tp_str*/
-  
-  /* Space for future expansion */
-  0L,0L,0L,0L,
-  HooksetType__doc__ /* Documentation string */
+  PyVarObject_HEAD_INIT(NULL, 0)
+  .tp_name = "eb.EB_Hookset",
+  .tp_basicsize = sizeof(HooksetObject),
+  .tp_dealloc = (destructor)hookset_dealloc,
+  .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC,
+  .tp_traverse = (traverseproc)hookset_traverse,
+  .tp_clear = (inquiry)hookset_clear,
+  .tp_methods = Hookset_methods,
+  .tp_doc = HooksetType__doc__,
 };
 
 /*********************************************************************
@@ -299,7 +280,7 @@ py_eb_initialize_library(PyObject *self, PyObject *args)
     return NULL;
   status = eb_initialize_library();
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+    set_eb_error(status);
     return NULL;
   }
   Py_INCREF(Py_None);
@@ -345,7 +326,7 @@ py_eb_copyright(PyObject *self, PyObject *args)
     return NULL;
   status = eb_copyright(&book->book, &pos);
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+    set_eb_error(status);
     return NULL;
   }
   return Py_BuildValue("(ii)", pos.page, pos.offset);
@@ -376,7 +357,7 @@ py_eb_bind(PyObject *self, PyObject *args)
     return NULL;
   status = eb_bind(&book->book, path);
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+    set_eb_error(status);
     return NULL;
   }
   Py_INCREF(Py_None);
@@ -422,7 +403,7 @@ py_eb_path(PyObject *self, PyObject *args)
     return NULL;
   status = eb_path(&book->book, path);
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+    set_eb_error(status);
     return NULL;
   }
   return PyString_FromString(path);
@@ -441,7 +422,7 @@ py_eb_disc_type(PyObject *self, PyObject *args)
     return NULL;
   status = eb_disc_type(&book->book, &disc_type);
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+    set_eb_error(status);
     return NULL;
   }
   return PyInt_FromLong(disc_type);
@@ -460,7 +441,7 @@ py_eb_character_code(PyObject *self, PyObject *args)
     return NULL;
   status = eb_character_code(&book->book, &char_code);
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+    set_eb_error(status);
     return NULL;
   }
   return PyInt_FromLong(char_code);
@@ -493,7 +474,7 @@ py_eb_menu(PyObject *self, PyObject *args)
     return NULL;
   status = eb_menu(&book->book, &pos);
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+    set_eb_error(status);
     return NULL;
   }
   return Py_BuildValue("(ii)", pos.page, pos.offset);
@@ -522,11 +503,11 @@ py_eb_search_exactword(PyObject *self, PyObject *args)
   const char *query;
   int status;
 
-  if (!PyArg_ParseTuple(args, "O!s", &BookType, &book, &query))
+  if (!PyArg_ParseTuple(args, "O!y", &BookType, &book, &query))
     return NULL;
   status = eb_search_exactword(&book->book, query);
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+    set_eb_error(status);
     return NULL;
   }
   Py_INCREF(Py_None);
@@ -556,11 +537,11 @@ py_eb_search_word(PyObject *self, PyObject *args)
   const char *query;
   int status;
 
-  if (!PyArg_ParseTuple(args, "O!s", &BookType, &book, &query))
+  if (!PyArg_ParseTuple(args, "O!y", &BookType, &book, &query))
     return NULL;
   status = eb_search_word(&book->book, query);
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+    set_eb_error(status);
     return NULL;
   }
   Py_INCREF(Py_None);
@@ -590,11 +571,11 @@ py_eb_search_endword(PyObject *self, PyObject *args)
   const char *query;
   int status;
 
-  if (!PyArg_ParseTuple(args, "O!s", &BookType, &book, &query))
+  if (!PyArg_ParseTuple(args, "O!y", &BookType, &book, &query))
     return NULL;
   status = eb_search_endword(&book->book, query);
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+    set_eb_error(status);
     return NULL;
   }
   Py_INCREF(Py_None);
@@ -623,7 +604,8 @@ py_eb_search_keyword(PyObject *self, PyObject *args)
   BookObject *book;
   PyObject *argv, *element;
   char *keywords[EB_MAX_KEYWORDS+1];
-  int argc, i, status;
+  Py_ssize_t argc, i, length;
+  int status;
 
   if (!PyArg_ParseTuple(args, "O!O!", &BookType, &book, &PyTuple_Type, &argv))
     return NULL;
@@ -633,17 +615,21 @@ py_eb_search_keyword(PyObject *self, PyObject *args)
   }
   for (i = 0; i < argc; i++) {
     element = PyTuple_GetItem(argv, i);
-    if (!PyString_Check(element)) {
-      PyErr_SetString(PyExc_ValueError,
-                      "2nd argument must be a tuple of strings");
+    if (!PyBytes_Check(element)) {
+      PyErr_SetString(PyExc_TypeError, "2nd argument must be a tuple of bytes");
       return NULL;
     }
-    keywords[i] = PyString_AsString(element);
+    if (PyBytes_AsStringAndSize(element, &keywords[i], &length) < 0)
+      return NULL;
+    if (memchr(keywords[i], '\0', (size_t)length) != NULL) {
+      PyErr_SetString(PyExc_ValueError, "keyword contains an embedded NUL");
+      return NULL;
+    }
   }
   keywords[argc] = NULL;
   status = eb_search_keyword(&book->book, (const char * const *)keywords);
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+    set_eb_error(status);
     return NULL;
   }
   Py_INCREF(Py_None);
@@ -678,7 +664,7 @@ py_eb_multi_search_list(PyObject *self, PyObject *args)
     return NULL;
   status = eb_multi_search_list(&book->book, multilist, &len);
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+    set_eb_error(status);
     return NULL;
   }
   if ((tuple = PyTuple_New(len)) == NULL)
@@ -703,7 +689,7 @@ py_eb_multi_entry_list(PyObject *self, PyObject *args)
     return NULL;
   status = eb_multi_entry_list(&book->book, search, entrylist, &len);
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+    set_eb_error(status);
     return NULL;
   }
   if ((tuple = PyTuple_New(len)) == NULL)
@@ -728,7 +714,7 @@ py_eb_multi_entry_label(PyObject *self, PyObject *args)
     return NULL;
   status = eb_multi_entry_label(&book->book, search, entry, buffer);
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+    set_eb_error(status);
     return NULL;
   }
   return PyString_FromString(buffer);
@@ -763,7 +749,7 @@ py_eb_multi_entry_candidates(PyObject *self, PyObject *args)
     return NULL;
   status = eb_multi_entry_candidates(&book->book, search, entry, &pos);
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+    set_eb_error(status);
     return NULL;
   }
   return Py_BuildValue("(ii)", pos.page, pos.offset);
@@ -787,7 +773,7 @@ py_eb_hit_list(PyObject *self, PyObject *args)
     return NULL;
   status = eb_hit_list(&book->book, MAX_HITS, hits, &len);
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+    set_eb_error(status);
     return NULL;
   }
   if ((tuple = PyTuple_New(len)) == NULL)
@@ -815,7 +801,7 @@ py_eb_load_all_subbooks(PyObject *self, PyObject *args)
     return NULL;
   status = eb_load_all_subbooks(&book->book);
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+    set_eb_error(status);
     return NULL;
   }
   Py_INCREF(Py_None);
@@ -836,7 +822,7 @@ py_eb_subbook_list(PyObject *self, PyObject *args)
     return NULL;
   status = eb_subbook_list(&book->book, sublist, &len);
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+    set_eb_error(status);
     return NULL;
   }
   if ((tuple = PyTuple_New(len)) == NULL)
@@ -859,7 +845,7 @@ py_eb_subbook(PyObject *self, PyObject *args)
     return NULL;
   status = eb_subbook(&book->book, &subbook);
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+    set_eb_error(status);
     return NULL;
   }
   return PyInt_FromLong(subbook);
@@ -878,7 +864,7 @@ py_eb_subbook_title(PyObject *self, PyObject *args)
     return NULL;
   status = eb_subbook_title(&book->book, title);
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+    set_eb_error(status);
     return NULL;
   }
   return PyString_FromString(title);
@@ -898,7 +884,7 @@ py_eb_subbook_title2(PyObject *self, PyObject *args)
     return NULL;
   status = eb_subbook_title2(&book->book, subbook, title);
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+    set_eb_error(status);
     return NULL;
   }
   return PyString_FromString(title);
@@ -917,7 +903,7 @@ py_eb_subbook_directory(PyObject *self, PyObject *args)
     return NULL;
   status = eb_subbook_directory(&book->book, directory);
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+    set_eb_error(status);
     return NULL;
   }
   return PyString_FromString(directory);
@@ -937,7 +923,7 @@ py_eb_subbook_directory2(PyObject *self, PyObject *args)
     return NULL;
   status = eb_subbook_directory2(&book->book, subbook, directory);
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+    set_eb_error(status);
     return NULL;
   }
   return PyString_FromString(directory);
@@ -956,7 +942,7 @@ py_eb_set_subbook(PyObject *self, PyObject *args)
     return NULL;
   status = eb_set_subbook(&book->book, subbook);
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+    set_eb_error(status);
     return NULL;
   }
   Py_INCREF(Py_None);
@@ -1032,7 +1018,7 @@ py_eb_bind_appendix(PyObject *self, PyObject *args)
     return NULL;
   status = eb_bind_appendix(&appendix->appendix, path);
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+    set_eb_error(status);
     return NULL;
   }
   Py_INCREF(Py_None);
@@ -1064,7 +1050,7 @@ py_eb_appendix_path(PyObject *self, PyObject *args)
     return NULL;
   status = eb_appendix_path(&appendix->appendix, path);
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+    set_eb_error(status);
     return NULL;
   }
   return PyString_FromString(path);
@@ -1084,7 +1070,7 @@ py_eb_load_all_appendix_subbooks(PyObject *self, PyObject *args)
     return NULL;
   status = eb_load_all_appendix_subbooks(&appendix->appendix);
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+    set_eb_error(status);
     return NULL;
   }
   Py_INCREF(Py_None);
@@ -1105,7 +1091,7 @@ py_eb_appendix_subbook_list(PyObject *self, PyObject *args)
     return NULL;
   status = eb_appendix_subbook_list(&appendix->appendix, sublist, &len);
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+    set_eb_error(status);
     return NULL;
   }
   if ((tuple = PyTuple_New(len)) == NULL)
@@ -1128,7 +1114,7 @@ py_eb_appendix_subbook(PyObject *self, PyObject *args)
     return NULL;
   status = eb_appendix_subbook(&appendix->appendix, &subbook);
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+    set_eb_error(status);
     return NULL;
   }
   return PyInt_FromLong(subbook);
@@ -1147,7 +1133,7 @@ py_eb_appendix_subbook_directory(PyObject *self, PyObject *args)
     return NULL;
   status = eb_appendix_subbook_directory(&appendix->appendix, directory);
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+    set_eb_error(status);
     return NULL;
   }
   return PyString_FromString(directory);
@@ -1168,7 +1154,7 @@ py_eb_appendix_subbook_directory2(PyObject *self, PyObject *args)
   status = eb_appendix_subbook_directory2(&appendix->appendix, subbook,
                                           directory);
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+    set_eb_error(status);
     return NULL;
   }
   return PyString_FromString(directory);
@@ -1187,7 +1173,7 @@ py_eb_set_appendix_subbook(PyObject *self, PyObject *args)
     return NULL;
   status = eb_set_appendix_subbook(&appendix->appendix, subbook);
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+    set_eb_error(status);
     return NULL;
   }
   Py_INCREF(Py_None);
@@ -1234,7 +1220,7 @@ py_eb_stop_code(PyObject *self, PyObject *args)
     return NULL;
   status = eb_stop_code(&appendix->appendix, &stop_code);
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+    set_eb_error(status);
     return NULL;
   }
   return PyInt_FromLong(stop_code);
@@ -1266,7 +1252,7 @@ py_eb_narrow_alt_start(PyObject *self, PyObject *args)
     return NULL;
   status = eb_narrow_alt_start(&appendix->appendix, &start);
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+    set_eb_error(status);
     return NULL;
   }
   return PyInt_FromLong(start);
@@ -1284,7 +1270,7 @@ py_eb_narrow_alt_end(PyObject *self, PyObject *args)
     return NULL;
   status = eb_narrow_alt_end(&appendix->appendix, &end);
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+    set_eb_error(status);
     return NULL;
   }
   return PyInt_FromLong(end);
@@ -1303,7 +1289,7 @@ py_eb_narrow_alt_character_text(PyObject *self, PyObject *args)
     return NULL;
   status = eb_narrow_alt_character_text(&appendix->appendix, ch, buffer);
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+    set_eb_error(status);
     return NULL;
   }
   return PyString_FromString(buffer);
@@ -1317,7 +1303,7 @@ static char py_eb_forward_narrow_alt_character__doc__[] = ""; static PyObject * 
     return NULL;
   status = eb_forward_narrow_alt_character(&appendix->appendix, n, &ch);
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+    set_eb_error(status);
     return NULL;
   }
   return PyInt_FromLong(ch);
@@ -1331,7 +1317,7 @@ static char py_eb_backward_narrow_alt_character__doc__[] = ""; static PyObject *
     return NULL;
   status = eb_backward_narrow_alt_character(&appendix->appendix, n, &ch);
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+    set_eb_error(status);
     return NULL;
   }
   return PyInt_FromLong(ch);
@@ -1363,7 +1349,7 @@ py_eb_wide_alt_start(PyObject *self, PyObject *args)
     return NULL;
   status = eb_wide_alt_start(&appendix->appendix, &start);
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+    set_eb_error(status);
     return NULL;
   }
   return PyInt_FromLong(start);
@@ -1381,7 +1367,7 @@ py_eb_wide_alt_end(PyObject *self, PyObject *args)
     return NULL;
   status = eb_wide_alt_end(&appendix->appendix, &end);
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+    set_eb_error(status);
     return NULL;
   }
   return PyInt_FromLong(end);
@@ -1400,7 +1386,7 @@ py_eb_wide_alt_character_text(PyObject *self, PyObject *args)
     return NULL;
   status = eb_wide_alt_character_text(&appendix->appendix, ch, buffer);
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+    set_eb_error(status);
     return NULL;
   }
   return PyString_FromString(buffer);
@@ -1414,7 +1400,7 @@ static char py_eb_forward_wide_alt_character__doc__[] = ""; static PyObject * py
     return NULL;
   status = eb_forward_wide_alt_character(&appendix->appendix, n, &ch);
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+    set_eb_error(status);
     return NULL;
   }
   return PyInt_FromLong(ch);
@@ -1428,7 +1414,7 @@ static char py_eb_backward_wide_alt_character__doc__[] = ""; static PyObject * p
     return NULL;
   status = eb_backward_wide_alt_character(&appendix->appendix, n, &ch);
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+    set_eb_error(status);
     return NULL;
   }
   return PyInt_FromLong(ch);
@@ -1457,7 +1443,16 @@ call_predefined_hook(
                         &BookType, &book, &AppendixType, &appendix,
                         &container, &code, &PyTuple_Type, &argv))
     return NULL;
-  c_argc = PyTuple_Size(argv);
+  if (PyTuple_GET_SIZE(argv) > EB_MAX_ARGV) {
+    PyErr_SetString(PyExc_ValueError, "too many predefined hook arguments");
+    return NULL;
+  }
+  c_argc = (int)PyTuple_GET_SIZE(argv);
+  if ((func == eb_hook_stop_code && c_argc < 2) ||
+      (func != eb_hook_newline && c_argc < 1)) {
+    PyErr_SetString(PyExc_ValueError, "not enough predefined hook arguments");
+    return NULL;
+  }
   for (i = 0; i < c_argc; i++) {
     element = PyTuple_GetItem(argv, i);
     if (!PyInt_Check(element)) {
@@ -1465,7 +1460,15 @@ call_predefined_hook(
                       "4th argument must be a tuple of integers");
       return NULL;
     }
-    c_argv[i] = PyInt_AsLong(element);
+    {
+      unsigned long value = PyLong_AsUnsignedLong(element);
+      if (PyErr_Occurred()) return NULL;
+      if (value > UINT_MAX) {
+        PyErr_SetString(PyExc_OverflowError, "hook argument is outside the C unsigned int range");
+        return NULL;
+      }
+      c_argv[i] = (unsigned int)value;
+    }
   }
   return PyInt_FromLong(func(&book->book, &appendix->appendix, container,
                              code, c_argc, c_argv));
@@ -1475,9 +1478,10 @@ static char py_eb_hook_euc_to_ascii__doc__[] = ""; static PyObject * py_eb_hook_
   return call_predefined_hook(eb_hook_euc_to_ascii, args);
 }
 
-/*static char py_eb_hook_stop_code__doc__[] = ""; static PyObject * py_eb_hook_stop_code(PyObject *self, PyObject *args) {*/
-  /*return call_predefined_hook(eb_hook_stop_code, args);*/
-/*}*/
+static char py_eb_hook_stop_code__doc__[] = "";
+static PyObject *py_eb_hook_stop_code(PyObject *self, PyObject *args) {
+  return call_predefined_hook(eb_hook_stop_code, args);
+}
 
 static char py_eb_hook_narrow_character_text__doc__[] = ""; static PyObject * py_eb_hook_narrow_character_text(PyObject *self, PyObject *args) {
   return call_predefined_hook(eb_hook_narrow_character_text, args);
@@ -1511,125 +1515,143 @@ static EB_Error_Code
 hook_handler(EB_Book *c_book, EB_Appendix *c_appendix, void *container,
              EB_Hook_Code code, int c_argc, const unsigned int *c_argv)
 {
-  PyObject *context, *argv, *callback, *callback_args, *result;
-  BookObject *book;
-  AppendixObject *appendix;
+  PyObject *key = NULL, *context = NULL, *argv = NULL, *callback;
+  PyObject *hook_code = NULL, *result = NULL, *item;
   HooksetObject *hookset;
-  int i, status;
+  long status = EB_ERR_FAIL_READ_TEXT;
+  int i;
 
-  /* prepare callback arguments based on context information */
-  context = PyDict_GetItem(CallbackContext, PyInt_FromLong(c_book->code));
-  book     = (BookObject     *)PyTuple_GetItem(context, 0);
-  appendix = (AppendixObject *)PyTuple_GetItem(context, 1);
-  hookset  = (HooksetObject  *)PyTuple_GetItem(context, 2);
-  argv = PyTuple_New(c_argc);
-  for (i = 0; i < c_argc; i++)
-    PyTuple_SetItem(argv, i, PyInt_FromLong(c_argv[i]));
-  callback_args = PyTuple_New(5);
-  Py_INCREF(book);
-  Py_INCREF(appendix);
-  Py_INCREF((PyObject *)container);
-  PyTuple_SetItem(callback_args, 0, (PyObject *)book);
-  PyTuple_SetItem(callback_args, 1, (PyObject *)appendix);
-  PyTuple_SetItem(callback_args, 2, (PyObject *)container);
-  PyTuple_SetItem(callback_args, 3, PyInt_FromLong(code));
-  PyTuple_SetItem(callback_args, 4, argv);
-  /* run callback function */
-  callback = PyDict_GetItem(hookset->callbacks, PyInt_FromLong(code));
-  Py_INCREF(callback);
-  result = PyObject_CallObject(callback, callback_args);
-  Py_DECREF(callback);
-  Py_DECREF(callback_args);
-  /* check return values */
-  if (result == NULL) {
-    status = EB_ERR_FAIL_READ_TEXT;
-  } else if (!PyInt_Check(result)) {
-    PyErr_SetString(PyExc_ValueError, "hook function must return an integer");
-    status = EB_ERR_FAIL_READ_TEXT;
-  } else {
-    status = PyInt_AsLong(result);
+  if (PyErr_Occurred()) return EB_ERR_FAIL_READ_TEXT;
+  key = PyLong_FromLong(c_book->code);
+  if (key == NULL) goto done;
+  context = PyDict_GetItemWithError(CallbackContext, key);
+  if (context == NULL) {
+    if (!PyErr_Occurred())
+      PyErr_SetString(PyExc_RuntimeError, "missing EB callback context");
+    goto done;
   }
-  if (PyErr_Occurred())
-    PyErr_Print();
+  Py_INCREF(context);
+  hookset = (HooksetObject *)PyTuple_GET_ITEM(context, 2);
+  hook_code = PyLong_FromLong(code);
+  if (hook_code == NULL) goto done;
+  callback = PyDict_GetItemWithError(hookset->callbacks, hook_code);
+  if (callback == NULL) {
+    if (!PyErr_Occurred())
+      PyErr_SetString(PyExc_RuntimeError, "missing EB hook callback");
+    goto done;
+  }
+  argv = PyTuple_New(c_argc);
+  if (argv == NULL) goto done;
+  for (i = 0; i < c_argc; i++) {
+    item = PyLong_FromUnsignedLong(c_argv[i]);
+    if (item == NULL) goto done;
+    PyTuple_SET_ITEM(argv, i, item);
+  }
+  /* Own the callable across callbacks that replace their own hook. */
+  Py_INCREF(callback);
+  result = PyObject_CallFunctionObjArgs(callback,
+      PyTuple_GET_ITEM(context, 0), PyTuple_GET_ITEM(context, 1),
+      (PyObject *)container, hook_code, argv, NULL);
+  Py_DECREF(callback);
+  if (result == NULL) goto done;
+  if (!PyLong_Check(result)) {
+    PyErr_SetString(PyExc_TypeError, "hook function must return an integer");
+    goto done;
+  }
+  status = PyLong_AsLong(result);
+  if (!PyErr_Occurred() && (status < INT_MIN || status > INT_MAX))
+    PyErr_SetString(PyExc_OverflowError, "hook status is outside the C int range");
+done:
   Py_XDECREF(result);
-  return status;
+  Py_XDECREF(argv);
+  Py_XDECREF(hook_code);
+  Py_XDECREF(context);
+  Py_XDECREF(key);
+  return PyErr_Occurred() ? EB_ERR_FAIL_READ_TEXT : (int)status;
 }
 
 static char py_eb_set_hook__doc__[] = "eb_set_hook(hookset, (int, callable)) => None Register a hook function.  Raise EBError if failed.";
 
 static PyObject *
+py_eb_set_hooks(PyObject *self, PyObject *args);
+
+static PyObject *
 py_eb_set_hook(PyObject *self, PyObject *args)
 {
   HooksetObject *hookset;
-  PyObject *callback;
-  EB_Hook hook = {EB_HOOK_NULL, hook_handler};
-  int status;
-
-  if (!PyArg_ParseTuple(args, "O!(iO)",
-                        &HooksetType, &hookset, &hook.code, &callback))
+  PyObject *pair, *hooks, *call_args, *result;
+  if (!PyArg_ParseTuple(args, "O!O", &HooksetType, &hookset, &pair))
     return NULL;
-  if (!PyCallable_Check(callback)) {
-    PyErr_SetString(PyExc_TypeError, "hook function must be callable");
-    return NULL;
-  }
-  status = eb_set_hook(&hookset->hookset, &hook);
-  if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
-    return NULL;
-  }
-  Py_INCREF(callback);
-  PyDict_SetItem(hookset->callbacks, PyInt_FromLong(hook.code), callback);
-  Py_INCREF(Py_None);
-  return Py_None;
+  hooks = PyTuple_Pack(1, pair);
+  if (hooks == NULL) return NULL;
+  call_args = PyTuple_Pack(2, hookset, hooks);
+  Py_DECREF(hooks);
+  if (call_args == NULL) return NULL;
+  result = py_eb_set_hooks(self, call_args);
+  Py_DECREF(call_args);
+  return result;
 }
 
-static char py_eb_set_hooks__doc__[] = "eb_set_hooks(hookset, (int, callable)[]) => None Register a set of hook functions.  Raise EBError if failed.";
+static char py_eb_set_hooks__doc__[] = "eb_set_hooks(hookset, (int, callable)[]) => None Register a set of hook functions.";
 
 static PyObject *
 py_eb_set_hooks(PyObject *self, PyObject *args)
 {
   HooksetObject *hookset;
-  PyObject *tuple, *element, *callback;
+  PyObject *tuple, *element, *key, *callbacks;
   EB_Hook hooks[EB_NUMBER_OF_HOOKS + 1];
-  int size, i, status;
+  Py_ssize_t size, i;
+  long code;
+  int status;
 
   if (!PyArg_ParseTuple(args, "O!O!",
                         &HooksetType, &hookset, &PyTuple_Type, &tuple))
     return NULL;
-  size = PyTuple_Size(tuple);
+  size = PyTuple_GET_SIZE(tuple);
   if (size > EB_NUMBER_OF_HOOKS) {
-    PyErr_SetString(PyExc_TypeError, "too many hooks");
+    PyErr_SetString(PyExc_ValueError, "too many hooks");
     return NULL;
   }
+  callbacks = PyDict_Copy(hookset->callbacks);
+  if (callbacks == NULL) return NULL;
+  /* Validate the whole batch and allocate its dictionary before changing C hooks. */
   for (i = 0; i < size; i++) {
-    element = PyTuple_GetItem(tuple, i);
-    if (!PyTuple_Check(element) || PyTuple_Size(element) != 2) {
-      PyErr_SetString(PyExc_TypeError,
-                      "each hook must be a pair of a hook code and function");
-      return NULL;
+    element = PyTuple_GET_ITEM(tuple, i);
+    if (!PyTuple_Check(element) || PyTuple_GET_SIZE(element) != 2) {
+      PyErr_SetString(PyExc_TypeError, "each hook must be a pair of a hook code and function");
+      goto error;
     }
-    hooks[i].code = PyInt_AsLong(PyTuple_GetItem(element, 0));
+    key = PyTuple_GET_ITEM(element, 0);
+    code = PyLong_AsLong(key);
+    if (PyErr_Occurred()) goto error;
+    if (code < 0 || code >= EB_NUMBER_OF_HOOKS) {
+      set_eb_error(EB_ERR_NO_SUCH_HOOK);
+      goto error;
+    }
+    if (!PyCallable_Check(PyTuple_GET_ITEM(element, 1))) {
+      PyErr_SetString(PyExc_TypeError, "hook function must be callable");
+      goto error;
+    }
+    hooks[i].code = (EB_Hook_Code)code;
     hooks[i].function = hook_handler;
-    if (!PyCallable_Check(PyTuple_GetItem(element, 1))) {
-      PyErr_SetString(PyExc_ValueError, "hook function must be callable");
-      return NULL;
-    }
+    key = PyLong_FromLong(code);
+    if (key == NULL) goto error;
+    status = PyDict_SetItem(callbacks, key, PyTuple_GET_ITEM(element, 1));
+    Py_DECREF(key);
+    if (status < 0) goto error;
   }
-  hooks[i].code = EB_HOOK_NULL;
-  hooks[i].function = NULL;
+  hooks[size].code = EB_HOOK_NULL;
+  hooks[size].function = NULL;
   status = eb_set_hooks(&hookset->hookset, hooks);
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
-    return NULL;
+    set_eb_error(status);
+    goto error;
   }
-  for (i = 0; i < size; i++) {
-    callback = PyTuple_GetItem(PyTuple_GetItem(tuple, i), 1);
-    PyDict_SetItem(hookset->callbacks, PyInt_FromLong(hooks[i].code),
-                   callback);
-    Py_INCREF(callback);
-  }
-  Py_INCREF(Py_None);
-  return Py_None;
+  Py_SETREF(hookset->callbacks, callbacks);
+  Py_RETURN_NONE;
+error:
+  Py_DECREF(callbacks);
+  return NULL;
 }
 
 static char py_eb_seek_text__doc__[] = "eb_seek_text(book, (int, int)) => None Seek the file to the specified position.  Raise EBError if failed.";
@@ -1646,7 +1668,7 @@ py_eb_seek_text(PyObject *self, PyObject *args)
     return NULL;
   status = eb_seek_text(&book->book, &pos);
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+    set_eb_error(status);
     return NULL;
   }
   Py_INCREF(Py_None);
@@ -1666,72 +1688,77 @@ py_eb_tell_text(PyObject *self, PyObject *args)
     return NULL;
   status = eb_tell_text(&book->book, &pos);
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+    set_eb_error(status);
     return NULL;
   }
   return Py_BuildValue("(ii)", pos.page, pos.offset);
 }
 
-static char py_eb_read_text__doc__[] = "eb_read_text(book, appendix, hookset) => string Read a data chunk from the entry text.  In order to read all the data chunks, applications have to call this function several times until it returns a null string.  Raise EBError if failed.";
+static char py_eb_read_text__doc__[] = "eb_read_text(book, appendix, hookset, container) => bytes Read a data chunk from the entry text.  In order to read all the data chunks, applications have to call this function several times until it returns a null string.  Raise EBError if failed.";
+
+static PyObject *
+read_text_chunk(PyObject *args, int heading)
+{
+  BookObject *book;
+  AppendixObject *appendix;
+  HooksetObject *hookset;
+  PyObject *container, *key, *context, *error_type, *error_value, *error_tb;
+  char buffer[EB_SIZE_PAGE];
+  int status, active;
+  ssize_t len;
+
+  if (!PyArg_ParseTuple(args, "O!O!O!O", &BookType, &book, &AppendixType,
+                        &appendix, &HooksetType, &hookset, &container))
+    return NULL;
+  key = PyLong_FromLong(book->book.code);
+  if (key == NULL) return NULL;
+  /* EB text uses a process-wide cache and a nonrecursive native mutex. */
+  active = (int)PyDict_Size(CallbackContext);
+  if (active != 0) {
+    Py_DECREF(key);
+    if (active > 0)
+      PyErr_SetString(PyExc_RuntimeError, "recursive EB text reading is unsupported");
+    return NULL;
+  }
+  context = PyTuple_Pack(3, book, appendix, hookset);
+  if (context == NULL || PyDict_SetItem(CallbackContext, key, context) < 0) {
+    Py_XDECREF(context);
+    Py_DECREF(key);
+    return NULL;
+  }
+  if (heading)
+    status = eb_read_heading(&book->book, &appendix->appendix, &hookset->hookset,
+                            container, EB_SIZE_PAGE - 1, buffer, &len);
+  else
+    status = eb_read_text(&book->book, &appendix->appendix, &hookset->hookset,
+                         container, EB_SIZE_PAGE - 1, buffer, &len);
+  /* Keep a Python callback's original exception and traceback through cleanup. */
+  PyErr_Fetch(&error_type, &error_value, &error_tb);
+  if (PyDict_DelItem(CallbackContext, key) < 0 && error_type != NULL)
+    PyErr_Clear();
+  Py_DECREF(key);
+  Py_DECREF(context);
+  if (error_type != NULL) PyErr_Restore(error_type, error_value, error_tb);
+  if (PyErr_Occurred()) return NULL;
+  if (status != EB_SUCCESS) {
+    set_eb_error(status);
+    return NULL;
+  }
+  return PyBytes_FromStringAndSize(buffer, len);
+}
 
 static PyObject *
 py_eb_read_text(PyObject *self, PyObject *args)
 {
-  BookObject *book;
-  AppendixObject *appendix;
-  HooksetObject *hookset;
-  PyObject *container, *key, *context;
-  char buffer[EB_SIZE_PAGE];
-  int status;
-  ssize_t len;
-
-  if (!PyArg_ParseTuple(args, "O!O!O!O", &BookType, &book, &AppendixType,
-                        &appendix, &HooksetType, &hookset, &container))
-    return NULL;
-  key = PyInt_FromLong(book->book.code);
-  context = Py_BuildValue("(OOO)", book, appendix, hookset);
-  PyDict_SetItem(CallbackContext, key, context);
-  status = eb_read_text(&book->book, &appendix->appendix, &hookset->hookset,
-                        container, EB_SIZE_PAGE - 1, buffer, &len);
-  PyDict_DelItem(CallbackContext, key);
-  Py_DECREF(key);
-  Py_DECREF(context);
-  if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
-    return NULL;
-  }
-  return PyString_FromStringAndSize(buffer, len);
+  return read_text_chunk(args, 0);
 }
 
-static char py_eb_read_heading__doc__[] = "eb_read_heading(book, appendix, hookset) => string Read a data chunk of the entry heading.  In order to read all the data chunks, applications have to call this function several times until it returns a null string.  Raise EBError if failed.";
+static char py_eb_read_heading__doc__[] = "eb_read_heading(book, appendix, hookset, container) => bytes Read the next heading chunk.";
 
 static PyObject *
 py_eb_read_heading(PyObject *self, PyObject *args)
 {
-  BookObject *book;
-  AppendixObject *appendix;
-  HooksetObject *hookset;
-  PyObject *container, *key, *context;
-  char buffer[EB_SIZE_PAGE];
-  int status;
-  ssize_t len;
-
-  if (!PyArg_ParseTuple(args, "O!O!O!O", &BookType, &book, &AppendixType,
-                        &appendix, &HooksetType, &hookset, &container))
-    return NULL;
-  key = PyInt_FromLong(book->book.code);
-  context = Py_BuildValue("(OOO)", book, appendix, hookset);
-  PyDict_SetItem(CallbackContext, key, context);
-  status = eb_read_heading(&book->book, &appendix->appendix, &hookset->hookset,
-                           container, EB_SIZE_PAGE - 1, buffer, &len);
-  PyDict_DelItem(CallbackContext, key);
-  Py_DECREF(key);
-  Py_DECREF(context);
-  if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
-    return NULL;
-  }
-  return PyString_FromStringAndSize(buffer, len);
+  return read_text_chunk(args, 1);
 }
 
 static char py_eb_read_rawtext__doc__[] = "eb_read_rawtext(book, int) => string Return the given number of raw characters read from the current file position.  Raise EBError if failed.";
@@ -1747,15 +1774,24 @@ py_eb_read_rawtext(PyObject *self, PyObject *args)
 
   if (!PyArg_ParseTuple(args, "O!i", &BookType, &book, &buffer_size))
     return NULL;
-  if ((buffer = (char *)malloc(buffer_size + 1)) == NULL)
+  if (buffer_size < 0) {
+    PyErr_SetString(PyExc_ValueError, "raw text size must be nonnegative");
+    return NULL;
+  }
+  if (PyDict_Size(CallbackContext) != 0) {
+    PyErr_SetString(PyExc_RuntimeError, "recursive EB text reading is unsupported");
+    return NULL;
+  }
+  if ((buffer = (char *)PyMem_Malloc((size_t)buffer_size + 1)) == NULL)
     return PyErr_NoMemory();
   status = eb_read_rawtext(&book->book, buffer_size, buffer, &len);
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+    PyMem_Free(buffer);
+    set_eb_error(status);
     return NULL;
   }
   string = PyString_FromStringAndSize(buffer, len);
-  free(buffer);
+  PyMem_Free(buffer);
   return string;
 }
 
@@ -1781,7 +1817,7 @@ static char py_eb_write_text_string__doc__[] = ""; static PyObject * py_eb_write
   BookObject *book;
   const char *string;
 
-  if (!PyArg_ParseTuple(args, "O!s", &BookType, &book, &string))
+  if (!PyArg_ParseTuple(args, "O!y", &BookType, &book, &string))
     return NULL;
   return PyInt_FromLong(eb_write_text_string(&book->book, string));
 }
@@ -1789,11 +1825,15 @@ static char py_eb_write_text_string__doc__[] = ""; static PyObject * py_eb_write
 static char py_eb_write_text__doc__[] = ""; static PyObject * py_eb_write_text(PyObject *self, PyObject *args) {
   BookObject *book;
   const char *string;
-  int size;
+  Py_ssize_t size;
 
-  if (!PyArg_ParseTuple(args, "O!s#", &BookType, &book, &string, &size))
+  if (!PyArg_ParseTuple(args, "O!y#", &BookType, &book, &string, &size))
     return NULL;
-  return PyInt_FromLong(eb_write_text(&book->book, string, size));
+  if (size > INT_MAX) {
+    PyErr_SetString(PyExc_OverflowError, "text buffer is too large");
+    return NULL;
+  }
+  return PyInt_FromLong(eb_write_text(&book->book, string, (int)size));
 }
 
 static char py_eb_current_candidate__doc__[] = "eb_current_candidate(book) => string Return the current candidate of the multi search.";
@@ -1808,27 +1848,29 @@ py_eb_current_candidate(PyObject *self, PyObject *args)
   return PyString_FromString(eb_current_candidate(&book->book));
 }
 
-static char py_eb_forward_text__doc__[] = "eb_forward_text(book, appendix) => string Return the body of the section starting from the current file position.  Raise EBError if failed.";
+static char py_eb_forward_text__doc__[] = "eb_forward_text(book, appendix) => None Advance to the next text section. EB 3.x uses its native default hooks. Raise EBError if failed.";
 
 static PyObject *
 py_eb_forward_text(PyObject *self, PyObject *args)
 {
   BookObject *book;
-  /*HooksetObject *hookset;*/
   AppendixObject *appendix;
   int status;
-
-  /*if (!PyArg_ParseTuple(args, "O!O!",*/
-                        /*&BookType, &book, &HooksetType, &hookset))*/
-  if (!PyArg_ParseTuple(args, "O!O",
+  if (!PyArg_ParseTuple(args, "O!O!",
                         &BookType, &book, &AppendixType, &appendix))
     return NULL;
-  status = eb_forward_text(&book->book, &appendix->appendix);
-  if (status == EB_ERR_END_OF_CONTENT) {
-    PyErr_SetObject(EBError, error_object(status));
+  if (PyDict_Size(CallbackContext) != 0) {
+    PyErr_SetString(PyExc_RuntimeError, "recursive EB text reading is unsupported");
     return NULL;
-  } else if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+  }
+#if EB_VERSION_MAJOR < 4
+  /* EB 3.x forwards with a hookset, not an appendix. Use native defaults. */
+  status = eb_forward_text(&book->book, NULL);
+#else
+  status = eb_forward_text(&book->book, &appendix->appendix);
+#endif
+  if (status != EB_SUCCESS) {
+    set_eb_error(status);
     return NULL;
   }
   Py_INCREF(Py_None);
@@ -1882,7 +1924,7 @@ py_eb_narrow_font_xbm_size(PyObject *self, PyObject *args)
     return NULL;
   status = eb_narrow_font_xbm_size(font, &size);
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+    set_eb_error(status);
     return NULL;
   }
   return PyInt_FromLong(size);
@@ -1901,7 +1943,7 @@ py_eb_narrow_font_xpm_size(PyObject *self, PyObject *args)
     return NULL;
   status = eb_narrow_font_xpm_size(font, &size);
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+    set_eb_error(status);
     return NULL;
   }
   return PyInt_FromLong(size);
@@ -1920,7 +1962,7 @@ py_eb_narrow_font_gif_size(PyObject *self, PyObject *args)
     return NULL;
   status = eb_narrow_font_gif_size(font, &size);
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+    set_eb_error(status);
     return NULL;
   }
   return PyInt_FromLong(size);
@@ -1939,7 +1981,7 @@ py_eb_wide_font_xbm_size(PyObject *self, PyObject *args)
     return NULL;
   status = eb_wide_font_xbm_size(font, &size);
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+    set_eb_error(status);
     return NULL;
   }
   return PyInt_FromLong(size);
@@ -1958,7 +2000,7 @@ py_eb_wide_font_xpm_size(PyObject *self, PyObject *args)
     return NULL;
   status = eb_wide_font_xpm_size(font, &size);
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+    set_eb_error(status);
     return NULL;
   }
   return PyInt_FromLong(size);
@@ -1977,7 +2019,7 @@ py_eb_wide_font_gif_size(PyObject *self, PyObject *args)
     return NULL;
   status = eb_wide_font_gif_size(font, &size);
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+    set_eb_error(status);
     return NULL;
   }
   return PyInt_FromLong(size);
@@ -1991,9 +2033,16 @@ py_eb_bitmap_to_xbm(PyObject *self, PyObject *args)
   char *bitmap, buffer[EB_SIZE_WIDE_FONT_48_XBM];
   int width, height;
   size_t size;
+  Py_ssize_t input_size;
 
-  if (!PyArg_ParseTuple(args, "s#ii", &bitmap, &size, &width, &height))
+  if (!PyArg_ParseTuple(args, "y#ii", &bitmap, &input_size, &width, &height))
     return NULL;
+  /* Bound the fixed-size EB font output buffer and the input bitmap. */
+  if (width <= 0 || width > EB_WIDTH_WIDE_FONT_48 || height <= 0 || height > EB_HEIGHT_FONT_48 ||
+      input_size < ((width + 7) / 8) * height) {
+    PyErr_SetString(PyExc_ValueError, "invalid or truncated EB font bitmap");
+    return NULL;
+  }
   eb_bitmap_to_xbm(bitmap, width, height, buffer, &size);
   return PyString_FromStringAndSize(buffer, size);
 }
@@ -2006,9 +2055,16 @@ py_eb_bitmap_to_xpm(PyObject *self, PyObject *args)
   char *bitmap, buffer[EB_SIZE_WIDE_FONT_48_XPM];
   int width, height;
   size_t size;
+  Py_ssize_t input_size;
 
-  if (!PyArg_ParseTuple(args, "s#ii", &bitmap, &size, &width, &height))
+  if (!PyArg_ParseTuple(args, "y#ii", &bitmap, &input_size, &width, &height))
     return NULL;
+  /* Bound the fixed-size EB font output buffer and the input bitmap. */
+  if (width <= 0 || width > EB_WIDTH_WIDE_FONT_48 || height <= 0 || height > EB_HEIGHT_FONT_48 ||
+      input_size < ((width + 7) / 8) * height) {
+    PyErr_SetString(PyExc_ValueError, "invalid or truncated EB font bitmap");
+    return NULL;
+  }
   eb_bitmap_to_xpm(bitmap, width, height, buffer, &size);
   return PyString_FromStringAndSize(buffer, size);
 }
@@ -2021,9 +2077,16 @@ py_eb_bitmap_to_gif(PyObject *self, PyObject *args)
   char *bitmap, buffer[EB_SIZE_WIDE_FONT_48_GIF];
   int width, height;
   size_t size;
+  Py_ssize_t input_size;
 
-  if (!PyArg_ParseTuple(args, "s#ii", &bitmap, &size, &width, &height))
+  if (!PyArg_ParseTuple(args, "y#ii", &bitmap, &input_size, &width, &height))
     return NULL;
+  /* Bound the fixed-size EB font output buffer and the input bitmap. */
+  if (width <= 0 || width > EB_WIDTH_WIDE_FONT_48 || height <= 0 || height > EB_HEIGHT_FONT_48 ||
+      input_size < ((width + 7) / 8) * height) {
+    PyErr_SetString(PyExc_ValueError, "invalid or truncated EB font bitmap");
+    return NULL;
+  }
   eb_bitmap_to_gif(bitmap, width, height, buffer, &size);
   return PyString_FromStringAndSize(buffer, size);
 }
@@ -2043,7 +2106,7 @@ py_eb_font(PyObject *self, PyObject *args)
     return NULL;
   status = eb_font(&book->book, &font);
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+    set_eb_error(status);
     return NULL;
   }
   return PyInt_FromLong(font);
@@ -2062,7 +2125,7 @@ py_eb_set_font(PyObject *self, PyObject *args)
     return NULL;
   status = eb_set_font(&book->book, font);
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+    set_eb_error(status);
     return NULL;
   }
   Py_INCREF(Py_None);
@@ -2097,7 +2160,7 @@ py_eb_font_list(PyObject *self, PyObject *args)
     return NULL;
   status = eb_font_list(&book->book, fontlist, &len);
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+    set_eb_error(status);
     return NULL;
   }
   if ((tuple = PyTuple_New(len)) == NULL)
@@ -2132,7 +2195,7 @@ py_eb_font_height(PyObject *self, PyObject *args)
     return NULL;
   status = eb_font_height(&book->book, &height);
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+    set_eb_error(status);
     return NULL;
   }
   return PyInt_FromLong(height);
@@ -2150,7 +2213,7 @@ py_eb_font_height2(PyObject *self, PyObject *args)
     return NULL;
   status = eb_font_height2(font, &height);
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+    set_eb_error(status);
     return NULL;
   }
   return PyInt_FromLong(height);
@@ -2182,7 +2245,7 @@ py_eb_narrow_font_width(PyObject *self, PyObject *args)
     return NULL;
   status = eb_narrow_font_width(&book->book, &width);
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+    set_eb_error(status);
     return NULL;
   }
   return PyInt_FromLong(width);
@@ -2200,7 +2263,7 @@ py_eb_narrow_font_width2(PyObject *self, PyObject *args)
     return NULL;
   status = eb_narrow_font_width2(font, &width);
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+    set_eb_error(status);
     return NULL;
   }
   return PyInt_FromLong(width);
@@ -2219,7 +2282,7 @@ py_eb_narrow_font_size(PyObject *self, PyObject *args)
     return NULL;
   status = eb_narrow_font_size(&book->book, &size);
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+    set_eb_error(status);
     return NULL;
   }
   return PyInt_FromLong(size);
@@ -2238,7 +2301,7 @@ py_eb_narrow_font_size2(PyObject *self, PyObject *args)
     return NULL;
   status = eb_narrow_font_size2(font, &size);
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+    set_eb_error(status);
     return NULL;
   }
   return PyInt_FromLong(size);
@@ -2256,7 +2319,7 @@ py_eb_narrow_font_start(PyObject *self, PyObject *args)
     return NULL;
   status = eb_narrow_font_start(&book->book, &start);
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+    set_eb_error(status);
     return NULL;
   }
   return PyInt_FromLong(start);
@@ -2274,7 +2337,7 @@ py_eb_narrow_font_end(PyObject *self, PyObject *args)
     return NULL;
   status = eb_narrow_font_end(&book->book, &end);
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+    set_eb_error(status);
     return NULL;
   }
   return PyInt_FromLong(end);
@@ -2294,12 +2357,12 @@ py_eb_narrow_font_character_bitmap(PyObject *self, PyObject *args)
     return NULL;
   status = eb_narrow_font_character_bitmap(&book->book, ch, buffer);
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+    set_eb_error(status);
     return NULL;
   }
   status = eb_narrow_font_size(&book->book, &size);
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+    set_eb_error(status);
     return NULL;
   }
   return PyString_FromStringAndSize(buffer, size);
@@ -2313,7 +2376,7 @@ static char py_eb_forward_narrow_font_character__doc__[] = ""; static PyObject *
     return NULL;
   status = eb_forward_narrow_font_character(&book->book, n, &ch);
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+    set_eb_error(status);
     return NULL;
   }
   return PyInt_FromLong(ch);
@@ -2327,7 +2390,7 @@ static char py_eb_backward_narrow_font_character__doc__[] = ""; static PyObject 
     return NULL;
   status = eb_backward_narrow_font_character(&book->book, n, &ch);
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+    set_eb_error(status);
     return NULL;
   }
   return PyInt_FromLong(ch);
@@ -2359,7 +2422,7 @@ py_eb_wide_font_width(PyObject *self, PyObject *args)
     return NULL;
   status = eb_wide_font_width(&book->book, &width);
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+    set_eb_error(status);
     return NULL;
   }
   return PyInt_FromLong(width);
@@ -2377,7 +2440,7 @@ py_eb_wide_font_width2(PyObject *self, PyObject *args)
     return NULL;
   status = eb_wide_font_width2(font, &width);
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+    set_eb_error(status);
     return NULL;
   }
   return PyInt_FromLong(width);
@@ -2396,7 +2459,7 @@ py_eb_wide_font_size(PyObject *self, PyObject *args)
     return NULL;
   status = eb_wide_font_size(&book->book, &size);
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+    set_eb_error(status);
     return NULL;
   }
   return PyInt_FromLong(size);
@@ -2415,7 +2478,7 @@ py_eb_wide_font_size2(PyObject *self, PyObject *args)
     return NULL;
   status = eb_wide_font_size2(font, &size);
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+    set_eb_error(status);
     return NULL;
   }
   return PyInt_FromLong(size);
@@ -2433,7 +2496,7 @@ py_eb_wide_font_start(PyObject *self, PyObject *args)
     return NULL;
   status = eb_wide_font_start(&book->book, &start);
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+    set_eb_error(status);
     return NULL;
   }
   return PyInt_FromLong(start);
@@ -2451,7 +2514,7 @@ py_eb_wide_font_end(PyObject *self, PyObject *args)
     return NULL;
   status = eb_wide_font_end(&book->book, &end);
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+    set_eb_error(status);
     return NULL;
   }
   return PyInt_FromLong(end);
@@ -2471,12 +2534,12 @@ py_eb_wide_font_character_bitmap(PyObject *self, PyObject *args)
     return NULL;
   status = eb_wide_font_character_bitmap(&book->book, ch, buffer);
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+    set_eb_error(status);
     return NULL;
   }
   status = eb_wide_font_size(&book->book, &size);
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+    set_eb_error(status);
     return NULL;
   }
   return PyString_FromStringAndSize(buffer, size);
@@ -2490,7 +2553,7 @@ static char py_eb_forward_wide_font_character__doc__[] = ""; static PyObject * p
     return NULL;
   status = eb_forward_wide_font_character(&book->book, n, &ch);
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+    set_eb_error(status);
     return NULL;
   }
   return PyInt_FromLong(ch);
@@ -2504,7 +2567,7 @@ static char py_eb_backward_wide_font_character__doc__[] = ""; static PyObject * 
     return NULL;
   status = eb_backward_wide_font_character(&book->book, n, &ch);
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+    set_eb_error(status);
     return NULL;
   }
   return PyInt_FromLong(ch);
@@ -2528,7 +2591,7 @@ py_eb_set_binary_mono_graphic(PyObject *self, PyObject *args)
     return NULL;
   status = eb_set_binary_mono_graphic(&book->book, &pos, width, height);
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+    set_eb_error(status);
     return NULL;
   }
   Py_INCREF(Py_None);
@@ -2549,7 +2612,7 @@ py_eb_set_binary_gray_graphic(PyObject *self, PyObject *args)
     return NULL;
   status = eb_set_binary_gray_graphic(&book->book, &pos, width, height);
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+    set_eb_error(status);
     return NULL;
   }
   Py_INCREF(Py_None);
@@ -2570,7 +2633,7 @@ py_eb_set_binary_color_graphic(PyObject *self, PyObject *args)
     return NULL;
   status = eb_set_binary_color_graphic(&book->book, &pos);
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+    set_eb_error(status);
     return NULL;
   }
   Py_INCREF(Py_None);
@@ -2591,7 +2654,7 @@ py_eb_set_binary_wave(PyObject *self, PyObject *args)
     return NULL;
   status = eb_set_binary_wave(&book->book, &start, &end);
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+    set_eb_error(status);
     return NULL;
   }
   Py_INCREF(Py_None);
@@ -2608,11 +2671,11 @@ py_eb_read_binary(PyObject *self, PyObject *args)
   int status;
   ssize_t size;
 
-  if (!PyArg_ParseTuple(args, "O!i", &BookType, &book))
+  if (!PyArg_ParseTuple(args, "O!", &BookType, &book))
     return NULL;
   status = eb_read_binary(&book->book, EB_SIZE_PAGE, buffer, &size);
   if (status != EB_SUCCESS) {
-    PyErr_SetObject(EBError, error_object(status));
+    set_eb_error(status);
     return NULL;
   }
   return PyString_FromStringAndSize(buffer, size);
@@ -2643,7 +2706,11 @@ py_eb_is_text_stopped(PyObject *self, PyObject *args)
   if (!PyArg_ParseTuple(args, "O!", &BookType, &book))
       return NULL;
 
+#if EB_VERSION_MAJOR < 4
+  return PyInt_FromLong(book->book.text_context.text_end_flag);
+#else
   return PyInt_FromLong(eb_is_text_stopped(&book->book));
+#endif
 }
 
 /* List of methods defined in the eb module */
@@ -2867,9 +2934,9 @@ static struct PyMethodDef eb_module_methods[] = {
   meth("eb_hook_euc_to_ascii",
        py_eb_hook_euc_to_ascii,
        py_eb_hook_euc_to_ascii__doc__),
-  /*meth("eb_hook_stop_code",*/
-       /*py_eb_hook_stop_code,*/
-       /*py_eb_hook_stop_code__doc__),*/
+  meth("eb_hook_stop_code",
+       py_eb_hook_stop_code,
+       py_eb_hook_stop_code__doc__),
   meth("eb_hook_narrow_character_text",
        py_eb_hook_narrow_character_text,
        py_eb_hook_narrow_character_text__doc__),
@@ -3080,32 +3147,30 @@ static struct PyMethodDef eb_module_methods[] = {
   {NULL, (PyCFunction)NULL, 0, NULL} /* sentinel */
 };
 
-/* Initialization function for the module (*must* be called initeb) */
+/* Python 3 module initializer. */
 
 static char eb_module_documentation[] = "";
 
-void
-initeb(void)
+static struct PyModuleDef eb_module = {
+  PyModuleDef_HEAD_INIT, "eb", eb_module_documentation, -1, eb_module_methods
+};
+
+PyMODINIT_FUNC
+PyInit_eb(void)
 {
-  PyObject *m, *d;
-
-  /* Create the module and add the functions */
-  m = Py_InitModule4("eb", eb_module_methods, eb_module_documentation,
-		     (PyObject*)NULL, PYTHON_API_VERSION);
-
-  /* Add some symbolic constants to the module */
-  d = PyModule_GetDict(m);
-
-  PyDict_SetItemString(d, "version", PyString_FromString(version));
-
+  PyObject *m;
+  if (PyType_Ready(&BookType) < 0 || PyType_Ready(&AppendixType) < 0 ||
+      PyType_Ready(&HooksetType) < 0) return NULL;
+  m = PyModule_Create(&eb_module);
+  if (m == NULL) return NULL;
+  if (PyModule_AddStringConstant(m, "version", version) < 0) goto error;
   EBError = PyErr_NewException("eb.EBError", NULL, NULL);
-  PyDict_SetItemString(d, "EBError", EBError);
-
+  if (EBError == NULL || PyModule_AddObjectRef(m, "EBError", EBError) < 0) goto error;
   CallbackContext = PyDict_New();
-  PyDict_SetItemString(d, "_callback_context", CallbackContext);
+  if (CallbackContext == NULL || PyModule_AddObjectRef(m, "_callback_context", CallbackContext) < 0) goto error;
 
 #define constI(dict, name, value) \
-        PyDict_SetItemString(dict, name, PyInt_FromLong(value));
+        if (PyModule_AddIntConstant(m, name, value) < 0) goto error;
 
   /* [defs.h] */
   /* Library version */
@@ -3178,7 +3243,7 @@ initeb(void)
   constI(d, "EB_HOOK_NARROW_JISX0208",       EB_HOOK_NARROW_JISX0208);
   constI(d, "EB_HOOK_WIDE_JISX0208",         EB_HOOK_WIDE_JISX0208);
   constI(d, "EB_HOOK_GB2312",                EB_HOOK_GB2312);
-  /*constI(d, "EB_HOOK_STOP_CODE",             EB_HOOK_STOP_CODE);*/
+  constI(d, "EB_HOOK_STOP_CODE",             EB_HOOK_STOP_CODE);
   constI(d, "EB_HOOK_BEGIN_MONO_GRAPHIC",    EB_HOOK_BEGIN_MONO_GRAPHIC);
   constI(d, "EB_HOOK_END_MONO_GRAPHIC",      EB_HOOK_END_MONO_GRAPHIC); 
   constI(d, "EB_HOOK_BEGIN_GRAY_GRAPHIC",    EB_HOOK_BEGIN_GRAY_GRAPHIC);
@@ -3193,8 +3258,10 @@ initeb(void)
   constI(d, "EB_HOOK_END_WAVE",              EB_HOOK_END_WAVE);
   constI(d, "EB_HOOK_BEGIN_MPEG",            EB_HOOK_BEGIN_MPEG);
   constI(d, "EB_HOOK_END_MPEG",              EB_HOOK_END_MPEG);
+#ifdef EB_HOOK_BEGIN_DECORATION
   constI(d, "EB_HOOK_BEGIN_DECORATION",      EB_HOOK_BEGIN_DECORATION);
   constI(d, "EB_HOOK_END_DECORATION",        EB_HOOK_END_DECORATION);
+#endif
   /* [error.h] */
   /* Error codes */
   constI(d, "EB_SUCCESS",                    EB_SUCCESS);
@@ -3259,7 +3326,9 @@ initeb(void)
   constI(d, "EB_ERR_NO_CANDIDATES",          EB_ERR_NO_CANDIDATES);
   constI(d, "EB_NUMBER_OF_ERRORS",           EB_NUMBER_OF_ERRORS);
   constI(d, "EB_MAX_ERROR_MESSAGE_LENGTH",   EB_MAX_ERROR_MESSAGE_LENGTH);
+#ifdef EB_ERR_END_OF_CONTENT
   constI(d, "EB_ERR_END_OF_CONTENT",         EB_ERR_END_OF_CONTENT);
+#endif
   /* [font.h] */   
   /* Font types */
   constI(d, "EB_FONT_16",                    EB_FONT_16);
@@ -3317,7 +3386,11 @@ initeb(void)
   constI(d, "EB_SIZE_WIDE_FONT_48_GIF",      EB_SIZE_WIDE_FONT_48_GIF);
   constI(d, "EB_SIZE_FONT_IMAGE",            EB_SIZE_FONT_IMAGE);
 
-  /* Check for errors */
-  if (PyErr_Occurred())
-    Py_FatalError("can't initialize the eb module");
+  if (PyErr_Occurred()) goto error;
+  return m;
+error:
+  Py_CLEAR(EBError);
+  Py_CLEAR(CallbackContext);
+  Py_DECREF(m);
+  return NULL;
 }

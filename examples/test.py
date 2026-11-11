@@ -1,4 +1,5 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 # -*- coding: utf-8 -*-
 #
 #  chujiten.py - an add-on program for xyaku
@@ -6,50 +7,45 @@
 #
 #  $Id: chujiten.py,v 1.3 2001/09/22 23:46:51 kajiyama Exp $
 #
-#  NOTE: This file contains Japanese characters (EUC-JP).
+#  NOTE: Source is UTF-8; EB dictionary bytes are decoded explicitly as EUC-JP.
 #
 
 from eb import *
 
 import getopt
-import string
+import unicodedata
 import sys
 import re
 
 def get_content(book, appendix, hookset, folded, packed):
-    buffer = []
-    while 1:
+    chunks = []
+    while True:
         data = eb_read_text(book, appendix, hookset, None)
         if not data:
             break
-        data = string.replace(data, "→§", "")
-        data = string.replace(data, "＝→", "＝")
-        data = string.replace(data, "⇒→", "⇒")
-        data = string.replace(data, "⇔→", "⇔")
-        buffer.append(data)
-    data = string.join(buffer, "")
+        chunks.append(data)
+    data = b"".join(chunks).decode("euc_jp")
+    for old, new in [("→§", ""), ("＝→", "＝"), ("⇒→", "⇒"), ("⇔→", "⇔")]:
+        data = data.replace(old, new)
     if packed:
-        data = string.replace(data, "\n", "") + "\n"
-    if folded < 0:
+        data = data.replace("\n", "") + "\n"
+    if folded <= 0:
         return data
-    i = end = 0
-    j = len(data)
-    buffer = []
-    while i < j:
-        if data[i] < "\200":
-            n = 1
-        else:
-            n = 2
-        if data[i] == "\n":
-            buffer.append(data[end:i])
-            end = i + 1
-        elif i - end + n > folded:
-            buffer.append(data[end:i])
-            end = i
-        i = i + n
-    if end < j - 1:
-        buffer.append(data[end:])
-    return string.join(buffer, "\n") + "\n"
+    lines, line, width = [], [], 0
+    for character in data:
+        columns = 2 if unicodedata.east_asian_width(character) in ("W", "F") else 1
+        if character == "\n":
+            lines.append("".join(line))
+            line, width = [], 0
+            continue
+        if line and width + columns > folded:
+            lines.append("".join(line))
+            line, width = [], 0
+        line.append(character)
+        width += columns
+    if line:
+        lines.append("".join(line))
+    return "\n".join(lines) + ("\n" if lines else "")
 
 def hook_font(book, appendix, container, code, argv):
     gaiji = {
@@ -99,7 +95,7 @@ def hook_font(book, appendix, container, code, argv):
         (EB_HOOK_WIDE_FONT, 0xa33c): "§",
         (EB_HOOK_WIDE_FONT, 0xa34f): "⇔",
         }
-    eb_write_text_string(book, gaiji.get((code, argv[0]), "?"))
+    eb_write_text_string(book, gaiji.get((code, argv[0]), "?").encode("euc_jp"))
     return EB_SUCCESS
 
 def make_candidates(word):
@@ -150,18 +146,19 @@ def main():
         (EB_HOOK_WIDE_FONT,   hook_font)))
     try:
         eb_bind(book, dictdir)
-    except EBError, (error, message):
+    except EBError as exception:
+        error, message = exception.args
         code = eb_error_string(error)
         sys.stderr.write("Error: %s: %s\n" % (code, message))
         sys.exit(1)
     eb_set_subbook(book, 0)
     if len(args) == 0:
-        word = string.strip(sys.stdin.read())
+        word = sys.stdin.read().strip()
     else:
-        word = string.join(args)
+        word = " ".join(args)
     for word in make_candidates(word):
         found = 0
-        eb_search_exactword(book, unicode(word,'utf-8').encode('euc-jp'))
+        eb_search_exactword(book, word.encode("euc_jp"))
         while 1:
             hitlist = eb_hit_list(book)
             if not hitlist:
@@ -170,9 +167,8 @@ def main():
             for heading, text in hitlist:
                 eb_seek_text(book, text)
                 content = get_content(book, appendix, hookset, folded, packed)
-                if string.strip(content):
-                    #sys.stdout.write(unicode(content,'euc-jp',errors='ignore'))
-                    print(unicode(content,'euc-jp',errors='ignore'))
+                if content.strip():
+                    print(content)
         if found:
             break
     eb_finalize_library()

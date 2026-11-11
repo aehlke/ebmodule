@@ -22,38 +22,18 @@ following location:
 
   http://www.sra.co.jp/people/m-kasahr/eb/
 
-This package supports Python 1.5.2 and later.
+This maintained port requires CPython 3.10 or later and setuptools.
 
 Installation
 ------------
 
-This package provides two installation procedures.
+Use an isolated Python environment and an owned EB installation prefix:
 
-o Using Distutils
+  $ EB_LIBRARY_PREFIX=/absolute/path/to/eb-prefix python3 -m pip install .
 
-The users of Python 2.0 and later can choose this option.  It
-uses Distutils, the standard installer modules adopted in Python
-2.0.  Run commands as follows:
-
-  $ python setup.py build
-  $ su
-  # python setup.py install
-
-o Using Makefile
-
-Another option is provided for the users of Python 1.5.2.  Run
-commands as follows:
-
-  $ make
-  $ su
-  # make install
-
-You can specify the version of Python that you want to use as
-follows, if you have multiple versions:
-
-  $ make PYTHON=python1.5
-  $ su
-  # make PYTHON=python1.5 install
+The prefix must contain matching include/eb headers and lib/libeb. Configure the
+runtime loader to find that same lib directory. See the Python 3 port section
+below for boundaries, real-fixture qualification, and platform limits.
 
 Usage
 -----
@@ -106,3 +86,63 @@ Any comments, suggestions, and/or patches are very welcome.
 Thank you for using the ebmodule package!
 
 $Id: README.en,v 1.2 2001/09/24 03:21:06 kajiyama Exp $
+
+
+Python 3 port
+=============
+
+This source now builds on CPython 3.10 or newer with setuptools and an installed
+compatible EB library/header set. The distribution remains ebmodule; the native
+import is eb, matching eblib and the C initializer. Python 2 is no longer a build
+target. This is a legacy single-phase extension, not a promise of isolated
+subinterpreter or free-threaded support.
+
+The low-level API returns bytes for EB-encoded text, titles, alternative glyph
+text, image data and raw buffers. Search queries, keyword tuples, text writes
+and bitmap inputs also take bytes. Encode using the dictionary's encoding
+(EUC-JP for the supplied examples); the extension never implicitly decodes EB
+bytes as UTF-8. Filesystem bind paths take str. Error message APIs return bytes.
+
+The eblib convenience layer accepts str search/write arguments and encodes them
+as EUC-JP; content results remain bytes. Decode after joining complete chunks,
+not independently per chunk, because a multibyte character may cross a boundary.
+The examples decode explicitly and preserve source characters without ignore
+error handlers. Binary/image output remains bytes, including embedded NULs.
+
+Set EB_LIBRARY_PREFIX to an owned EB installation prefix to select its include
+and lib directories together. Build with python3 -m pip install . in an isolated
+environment; configure the platform runtime loader for that same lib directory.
+No system-wide installation is needed. The checked-in EB 3.1 library is supported:
+text_status() returns its native content-mode code, and eb_is_text_stopped() reads
+its text-end flag. eb_forward_text(book, appendix) uses EB 3.x default native hooks
+(the old C API takes a hookset); on EB 4.x it passes the appendix. Constants absent
+from older headers, such as decoration hooks and EB_ERR_END_OF_CONTENT, are omitted.
+Run:
+
+    python3 -m unittest discover -s tests -v
+
+For the real dictionary gate, set EB_TEST_FIXTURE_ROOT to the fixtures directory
+of the retained eb4j packet (commit bccd2f8b852928a42076e7af54675c7240544364),
+keeping its license notices, and run tests/test_real_epwing.py through unittest.
+It checks pinned source hashes, plain/compressed search, Japanese text, hook
+exceptions/recovery and chunk boundaries, raw bytes, BMP binary reads, real gaiji
+font data/conversions, and appendix binding. Without the variable those tests
+explicitly skip; that is an incomplete real-fixture gate. No data is bundled here.
+
+The retained books have exactword/word indexes; endword/keyword calls verify the
+actual unsupported-index errors. Successful endword/keyword search still requires
+a legitimate dictionary containing those indexes. The binary test reads a bounded
+HONMON slice through the native monochrome BMP API; it does not claim an authored
+picture, WAVE, or JPEG fixture. Those media paths remain unqualified.
+
+Callbacks retain the original Python exception and traceback. Hook batches are
+validated before registration, and replaced callbacks/cycles can be collected.
+Recursive text reading from callbacks is rejected before entering EB's shared
+native cache; callbacks may write replacement bytes with eb_write_text APIs.
+Windows compilation/import remains a separate required gate when Windows binaries
+are distributed. No system-wide installation is required by these instructions.
+
+Python 3 migration intent credited to rroessler1 (aehlke/ebmodule#1). The completed
+port retains binary data as bytes and uses named modern PyTypeObject fields,
+PyType_Ready and nonfatal checked module initialization rather than the raw PR's
+positional ABI edits and blanket UTF-8 Unicode conversions.
